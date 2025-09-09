@@ -308,33 +308,18 @@ wss.on('connection', function connection(ws) {
                 break;
 
             case 'get_lobby_members': {
-                const { code } = data;
-                if (lobbies[code]) {
-                    const memberList = lobbies[code].players.map(uid => ({
-                        userId: uid,
-                        username: players[uid]?.username || null,
-                        isHost: lobbies[code].host === uid,
-                        isReady: players[uid]?.ready || false
-                    }));
-                    // Only send to the requesting client
-                    ws.send(JSON.stringify({ type: 'lobby_members', code, members: memberList }));
-                    console.log(JSON.stringify({ type: 'lobby_members', code, members: memberList }))
-                } else {
-                    ws.send(JSON.stringify({ type: 'lobby_error', message: 'Lobby not found' }));
-                }
-                break;
-            }
-
-            case 'get_lobby_members': {
                 const code = data.code || player.lobbyCode;
                 if (lobbies[code]) {
                     const memberList = lobbies[code].players.map(uid => ({
                         userId: uid,
                         username: players[uid]?.username || null,
                         isHost: lobbies[code].host === uid,
-                        isReady: players[uid]?.ready || false
+                        isReady: players[uid]?.ready || false,
+                        class: players[uid]?.class || "pistol"
                     }));
+                    // Only send to the requesting client
                     ws.send(JSON.stringify({ type: 'lobby_members', code, members: memberList }));
+                    console.log('Sent lobby members for code:', code, 'members:', memberList);
                 } else {
                     ws.send(JSON.stringify({ type: 'lobby_error', message: 'Lobby not found' }));
                 }
@@ -343,43 +328,49 @@ wss.on('connection', function connection(ws) {
 
             case 'set_ready': {
                 // Handle ready/unready toggle from frontend
+                const code = data.code || player.lobbyCode;
+                if (!code || !lobbies[code]) {
+                    console.log('Cannot set ready: lobby not found', code);
+                    ws.send(JSON.stringify({ type: 'lobby_error', message: 'Lobby not found' }));
+                    break;
+                }
+
                 if (typeof data.ready === 'boolean') {
                     player.ready = data.ready;
-                    console.log(`${player.username || userId} set ready: ${data.ready}`);
+                    console.log(`${player.username || userId} set ready: ${data.ready} in lobby ${code}`);
 
                     // Broadcast updated lobby members to all clients in the same lobby
-                    const code = data.code || player.lobbyCode;
-                    if (code && lobbies[code]) {
-                        const memberList = lobbies[code].players.map(uid => ({
-                            userId: uid,
-                            username: players[uid]?.username || null,
-                            isHost: lobbies[code].host === uid,
-                            isReady: players[uid]?.ready || false
-                        }));
-                        broadcastToLobby(code, "lobby_members", { code, members: memberList });
+                    const memberList = lobbies[code].players.map(uid => ({
+                        userId: uid,
+                        username: players[uid]?.username || null,
+                        isHost: lobbies[code].host === uid,
+                        isReady: players[uid]?.ready || false,
+                        class: players[uid]?.class || "pistol"
+                    }));
+                    broadcastToLobby(code, "lobby_members", { code, members: memberList });
 
-                        // Check if all players are ready and we have at least 2 players
-                        const allReady = lobbies[code].players.every(uid => players[uid]?.ready);
-                        const enoughPlayers = lobbies[code].players.length >= 2;
+                    // Check if all players are ready and we have at least 2 players
+                    const allReady = lobbies[code].players.every(uid => players[uid]?.ready);
+                    const enoughPlayers = lobbies[code].players.length >= 2;
 
-                        if (allReady && enoughPlayers && !gameStarted) {
-                            // Remove null/unnamed users before starting the game
-                            removeNullUsersFromLobby(code);
-                            // Start countdown for game start
-                            console.log(`All players ready in lobby ${code}, starting countdown`);
-                            broadcastToLobby(code, "game_start_countdown", { countdown: 3 });
+                    if (allReady && enoughPlayers && !gameStarted) {
+                        // Remove null/unnamed users before starting the game
+                        removeNullUsersFromLobby(code);
+                        // Start countdown for game start
+                        console.log(`All players ready in lobby ${code}, starting countdown`);
+                        broadcastToLobby(code, "game_start_countdown", { countdown: 3 });
 
-                            // After 3 seconds, start the game
-                            setTimeout(() => {
-                                if (lobbies[code]) {
-                                    tryStartGame();
-                                    gameStarted = true;
-                                    console.log(`Game started in lobby ${code}`);
-                                }
-                            }, 3000);
-
-                        }
+                        // After 3 seconds, start the game
+                        setTimeout(() => {
+                            if (lobbies[code]) {
+                                tryStartGame();
+                                gameStarted = true;
+                                console.log(`Game started in lobby ${code}`);
+                            }
+                        }, 3000);
                     }
+                } else {
+                    console.log('Invalid ready value received:', data.ready);
                 }
                 break;
             }
@@ -501,6 +492,37 @@ wss.on('connection', function connection(ws) {
 
     ws.on('close', () => {
         console.log(`Client ${userId} disconnected`);
+        // Clean up player from lobbies when they disconnect
+        if (player.lobbyCode && lobbies[player.lobbyCode]) {
+            const lobby = lobbies[player.lobbyCode];
+            lobby.players = lobby.players.filter(pid => pid !== userId);
+            
+            // If lobby is empty, delete it
+            if (lobby.players.length === 0) {
+                delete lobbies[player.lobbyCode];
+                delete lobbyFaceData[player.lobbyCode];
+                console.log(`Deleted empty lobby ${player.lobbyCode}`);
+            } else {
+                // If the host left, assign new host
+                if (lobby.host === userId && lobby.players.length > 0) {
+                    lobby.host = lobby.players[0];
+                    players[lobby.players[0]].isHost = true;
+                    console.log(`Assigned new host ${lobby.players[0]} to lobby ${player.lobbyCode}`);
+                }
+                
+                // Broadcast updated member list
+                broadcastToLobby(player.lobbyCode, "lobby_members", {
+                    code: player.lobbyCode,
+                    members: lobby.players.map(uid => ({
+                        userId: uid,
+                        username: players[uid]?.username || null,
+                        isHost: lobby.host === uid,
+                        isReady: players[uid]?.ready || false,
+                        class: players[uid]?.class || "pistol"
+                    }))
+                });
+            }
+        }
         delete players[userId];
         updateLobbyStatus();
     });
