@@ -4,9 +4,8 @@
     "description": "Lazer Tag application with React frontend and Node.js backend",
     "main": "index.js",
     "scripts": {
-        "start": "concurrently \"npm run start --prefix backend\" \"npm run start --prefix frontend\"",
-        "install-all": "npm install && npm install --prefix backend && npm install --prefix frontend",
-        "postinstall": "npm run install-all",
+        "start": "node start-all.js",
+        "install-all": "npm install && npm install --prefix backend && npm install --prefix frontend && npm install wait-on",
         "build": "npm run build --prefix frontend && npm run build --prefix backend"
     },
     "keywords": [
@@ -21,5 +20,8 @@
         "concurrently": "^8.2.0",
         "devcert": "^1.2.2",
         "mkcert": "^3.2.0"
+    },
+    "dependencies": {
+        "wait-on": "^8.0.4"
     }
 }
