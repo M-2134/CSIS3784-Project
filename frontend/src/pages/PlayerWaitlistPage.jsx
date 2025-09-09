@@ -13,10 +13,9 @@ const PlayerWaitlistPage = ({ players, currentUser, lobbyCode, isStarting, count
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameInputValue, setNameInputValue] = useState('');
   const [isFaceScanComplete, setIsFaceScanComplete] = useState(false);
-  // 30s countdown clock state
+  // 120s countdown clock state
   const [autoCountdown, setAutoCountdown] = useState(120);
   const [autoCountdownActive, setAutoCountdownActive] = useState(true);
-  // 30s countdown effect for top right clock
   // Track if we should show the scan face warning
   const [showScanFaceWarning, setShowScanFaceWarning] = useState(false);
 
@@ -58,13 +57,21 @@ const PlayerWaitlistPage = ({ players, currentUser, lobbyCode, isStarting, count
     }
   }
 
+  // Modified countdown effect - only count down when user is NOT ready and face scan is complete
   useEffect(() => {
-    if (!autoCountdownActive) return;
+    if (!autoCountdownActive || !currentUser) return;
+    
+    // If user is ready, pause the countdown
+    if (currentUser.isReady) {
+      return;
+    }
+    
+    // Only count down if user is not ready
     if (autoCountdown > 0) {
       const timer = setTimeout(() => setAutoCountdown(c => c - 1), 1000);
       return () => clearTimeout(timer);
-    } else if (autoCountdown === 0 && autoCountdownActive) {
-      // Only auto-ready if face is scanned
+    } else if (autoCountdown === 0 && autoCountdownActive && !currentUser.isReady) {
+      // Only auto-ready if face is scanned and user is not already ready
       if (players && players.length > 0 && currentUser && lobbyCode) {
         if (isFaceScanComplete) {
           sendMessage({ type: 'set_ready', code: lobbyCode, ready: true });
@@ -84,23 +91,48 @@ const PlayerWaitlistPage = ({ players, currentUser, lobbyCode, isStarting, count
       !autoCountdownActive &&
       showScanFaceWarning &&
       isFaceScanComplete &&
-      players && players.length > 0 && currentUser && lobbyCode
+      players && players.length > 0 && currentUser && lobbyCode &&
+      !currentUser.isReady // Only auto-ready if not already ready
     ) {
       sendMessage({ type: 'set_ready', code: lobbyCode, ready: true });
       setShowScanFaceWarning(false);
     }
   }, [isFaceScanComplete, autoCountdown, autoCountdownActive, showScanFaceWarning, players, currentUser, lobbyCode, sendMessage]);
 
-  // Restart timer if player goes from ready to not ready
+  // Track ready state changes and restart countdown when going from ready to not ready
   const prevIsReadyRef = useRef(currentUser?.isReady);
   useEffect(() => {
     if (!currentUser) return;
-    if (prevIsReadyRef.current && !currentUser.isReady) {
+    
+    const wasReady = prevIsReadyRef.current;
+    const isNowReady = currentUser.isReady;
+    
+    // If player went from ready to not ready, restart the countdown
+    if (wasReady && !isNowReady) {
+      console.log("Player went from ready to not ready, restarting countdown");
       setAutoCountdown(120);
       setAutoCountdownActive(true);
+      setShowScanFaceWarning(false);
     }
-    prevIsReadyRef.current = currentUser.isReady;
-  }, [currentUser]);
+    // If player went from not ready to ready, the countdown will pause automatically
+    else if (!wasReady && isNowReady) {
+      console.log("Player went from not ready to ready, countdown will pause");
+      setShowScanFaceWarning(false);
+    }
+    
+    prevIsReadyRef.current = isNowReady;
+  }, [currentUser?.isReady]);
+
+  // Reset countdown when face scan is completed/reset
+  useEffect(() => {
+    // If face scan is reset (goes from complete to incomplete), restart countdown
+    if (!isFaceScanComplete && currentUser && !currentUser.isReady) {
+      setAutoCountdown(120);
+      setAutoCountdownActive(true);
+      setShowScanFaceWarning(false);
+    }
+  }, [isFaceScanComplete, currentUser]);
+
   // NEW: A ref to hold the Audio object, preventing it from being re-created on every render.
   const countdownSoundRef = useRef(null);
   // NEW: A ref that acts as a flag to ensure the sound plays only once per countdown.
@@ -112,7 +144,9 @@ const PlayerWaitlistPage = ({ players, currentUser, lobbyCode, isStarting, count
 
   useEffect(() => {
     if (currentUser) {
-      setNameInputValue(currentUser.name);
+      // Get stored username for consistency
+      const storedUsername = localStorage.getItem('currentUsername');
+      setNameInputValue(storedUsername || currentUser.name);
 
       // Check if face scan is already complete for this user in this session
       try {
@@ -127,7 +161,7 @@ const PlayerWaitlistPage = ({ players, currentUser, lobbyCode, isStarting, count
         console.error("Error checking face scan status:", e);
       }
     }
-  }, [currentUser]);
+  }, [currentUser, lobbyCode]);
 
   // NEW: This effect hook runs only once on mount to create the audio objects.
   useEffect(() => {
@@ -180,13 +214,17 @@ const PlayerWaitlistPage = ({ players, currentUser, lobbyCode, isStarting, count
 
   const handleEditName = () => {
     if (currentUser) { // Ensure currentUser exists before setting input value
-      setNameInputValue(currentUser.name);
+      // Use stored username for consistency
+      const storedUsername = localStorage.getItem('currentUsername');
+      setNameInputValue(storedUsername || currentUser.name);
       setIsEditingName(true);
     }
   };
 
   const handleSaveName = () => {
     if (nameInputValue.trim() !== '') {
+      // Store the new username immediately in localStorage
+      localStorage.setItem('currentUsername', nameInputValue.trim());
       onNameChange(nameInputValue.trim());
       setIsEditingName(false);
     }
@@ -195,14 +233,35 @@ const PlayerWaitlistPage = ({ players, currentUser, lobbyCode, isStarting, count
   // Function to handle ready toggle with WebSocket
   const handleReadyToggle = () => {
     if (currentUser && lobbyCode) {
+      console.log("PlayerWaitlistPage: Toggling ready state for user:", currentUser.id, "current ready:", currentUser.isReady);
+      
       sendMessage({ 
         type: 'set_ready', 
         code: lobbyCode,
         ready: !currentUser.isReady 
       });
     } else {
+      console.log("PlayerWaitlistPage: Cannot toggle ready - missing currentUser or lobbyCode");
       // Fall back to the passed onReadyToggle if no WebSocket or missing data
       onReadyToggle();
+    }
+  };
+
+  // Handle face scan completion
+  const handleFaceScanComplete = () => {
+    setIsFaceScanComplete(true);
+    console.log("Face scan completed");
+  };
+
+  // Handle face scan reset (when rescanning)
+  const handleFaceScanReset = () => {
+    setIsFaceScanComplete(false);
+    console.log("Face scan reset - starting rescan");
+    
+    // If user was ready, unready them when they rescan
+    if (currentUser && currentUser.isReady) {
+      console.log("User was ready, unreadying due to face rescan");
+      handleReadyToggle();
     }
   };
 
@@ -256,10 +315,9 @@ const PlayerWaitlistPage = ({ players, currentUser, lobbyCode, isStarting, count
 
   const readyPlayersCount = players.filter((p) => p.isReady).length
 
-
-  return (
+  return (
     <div className="space-y-4 px-4">
-      {/* Mobile-first status indicators */}
+      {/* Mobile-first status indicators - modified to show READY when ready, countdown when not ready */}
       {currentUser?.isReady ? (
         <div className="fixed top-4 right-4 z-50">
           <div className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 px-4 py-2 rounded-full shadow-lg">
@@ -348,7 +406,9 @@ const PlayerWaitlistPage = ({ players, currentUser, lobbyCode, isStarting, count
                               isCurrentPlayer ? "text-[#e971ff]" : "text-white"
                             }`}
                           >
-                            {player.name}
+                            {isCurrentPlayer && localStorage.getItem('currentUsername') 
+                              ? localStorage.getItem('currentUsername') 
+                              : player.name}
                           </span>
                           {isCurrentPlayer && (
                             <span className="bg-[#e971ff]/20 text-[#e971ff] px-2 py-1 rounded-full text-xs font-medium">
@@ -404,13 +464,14 @@ const PlayerWaitlistPage = ({ players, currentUser, lobbyCode, isStarting, count
         })}
       </div>
 
-      {/* Face Scan Section */}
+      {/* Face Scan Section - modified to handle rescan events */}
       {currentUser && !isStarting && (
         <div className="bg-gradient-to-br from-[#1f152b] to-[#0f051d] rounded-2xl p-4 border border-[#2a3441]/30 shadow-xl">
           <PlayerScan
-            username={currentUser.name}
+            username={localStorage.getItem('currentUsername') || currentUser.name}
             lobbyCode={lobbyCode}
-            onScanComplete={() => setIsFaceScanComplete(true)}
+            onScanComplete={handleFaceScanComplete}
+            onScanReset={handleFaceScanReset}
           />
         </div>
       )}
