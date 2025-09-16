@@ -21,17 +21,28 @@ const WaitlistPage = () => {
   const [currentUserId, setCurrentUserId] = useState(null); // New state for current user ID
   const [isStarting, setIsStarting] = useState(false);
   const [countdown, setCountdown] = useState(30);
+  const [isInitialized, setIsInitialized] = useState(false); // Track initialization state
+  const [debugInfo, setDebugInfo] = useState([]); // Debug information
+  const [retryCount, setRetryCount] = useState(0); // Track retry attempts
+
+  // Add debug logging function
+  const addDebugLog = (message) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setDebugInfo(prev => [`[${timestamp}] ${message}`, ...prev.slice(0, 9)]);
+    console.log(`[WaitlistPage Debug] ${message}`);
+  };
 
   // --- DERIVED STATE ---
   const currentUser = useMemo(() => {
     if (!currentUserId || !players || players.length === 0) return null;
 
-    console.log("Finding current user with ID:", currentUserId);
-    console.log("Available players:", players);
+    addDebugLog(`Finding current user with ID: ${currentUserId}, available players: ${players.length}`);
 
     const user = players.find(p => p.id === currentUserId);
     if (!user) {
-      console.log("Current user not found in players list");
+      addDebugLog("Current user not found in players list");
+    } else {
+      addDebugLog(`Found current user: ${user.name}`);
     }
     return user || null;
   }, [players, currentUserId]);
@@ -41,106 +52,186 @@ const WaitlistPage = () => {
   // --- WEBSOCKET & COUNTDOWN LOGIC ---
   useEffect(() => {
     if (wsStatus === 'open' && lobbyId) {
+      addDebugLog("WebSocket connection ready, initializing waitlist page");
+      
       // Try to get userId from localStorage
       const storedId = localStorage.getItem('userId');
       if (storedId) {
-        console.log("Setting currentUserId from localStorage in initial effect:", storedId);
+        addDebugLog(`Setting currentUserId from localStorage: ${storedId}`);
         setCurrentUserId(storedId);
       } else {
-        console.log("No userId found in localStorage");
+        addDebugLog("No userId found in localStorage");
       }
 
-      // Request lobby members
-      console.log("Requesting lobby members for:", lobbyId);
+      // Get stored username if available
+      const storedUsername = localStorage.getItem('currentUsername');
+      if (storedUsername && storedId) {
+        addDebugLog(`Found stored username: ${storedUsername}`);
+      }
+
+      // Request lobby members immediately
+      addDebugLog(`Requesting lobby members for: ${lobbyId}`);
       sendMessage({ type: 'get_lobby_members', code: lobbyId });
+      
+      // Set initialization timeout
+      const initTimeout = setTimeout(() => {
+        addDebugLog("Initialization timeout reached");
+        setIsInitialized(true);
+      }, 3000); // Increased timeout
+
+      return () => clearTimeout(initTimeout);
     } else {
-      console.log("WebSocket not ready or no lobbyId. Status:", wsStatus, "LobbyId:", lobbyId);
+      addDebugLog(`WebSocket not ready. Status: ${wsStatus}, LobbyId: ${lobbyId}`);
     }
   }, [wsStatus, lobbyId, sendMessage]);
 
-  // Retry mechanism for when user is not found in player list
+  // Enhanced retry mechanism
   useEffect(() => {
-    if (currentUserId && players.length > 0 && !currentUser && wsStatus === 'open') {
-      console.log("User not found in player list, retrying...");
+    if (currentUserId && players.length === 0 && wsStatus === 'open' && isInitialized && retryCount < 5) {
+      addDebugLog(`Retry attempt ${retryCount + 1}: No players found, requesting lobby members again`);
+      
       const retryTimer = setTimeout(() => {
         sendMessage({ type: 'get_lobby_members', code: lobbyId });
-      }, 1000);
+        setRetryCount(prev => prev + 1);
+      }, 2000 * (retryCount + 1)); // Exponential backoff
 
       return () => clearTimeout(retryTimer);
     }
-  }, [currentUserId, players, currentUser, wsStatus, lobbyId, sendMessage]);
+  }, [currentUserId, players.length, wsStatus, lobbyId, sendMessage, isInitialized, retryCount]);
 
-  // Request lobby members if not received after 1s
+  // Force initialization after maximum retries
   useEffect(() => {
-    if (wsStatus === 'open' && lobbyId && players.length <2 ) {
-      const timeout = setTimeout(() => {
-        sendMessage({ type: 'get_lobby_members', code: lobbyId });
-      }, 1000);
-      return () => clearTimeout(timeout);
+    if (retryCount >= 5 && players.length === 0) {
+      addDebugLog("Maximum retries reached, creating fallback user data");
+      
+      // Create fallback user data
+      const storedUsername = localStorage.getItem('currentUsername');
+      const storedUserId = localStorage.getItem('userId');
+      
+      if (storedUserId && storedUsername) {
+        setPlayers([{
+          id: storedUserId,
+          name: storedUsername,
+          isHost: true, // Assume host since we created the lobby
+          isReady: false,
+          class: localStorage.getItem('playerClass') || 'pistol'
+        }]);
+        addDebugLog("Created fallback user data");
+      }
     }
-  }, [wsStatus, lobbyId, players.length, sendMessage]);
+  }, [retryCount, players.length]);
+
+  // Periodic refresh to keep data synchronized
+  useEffect(() => {
+    if (wsStatus === 'open' && lobbyId && isInitialized && players.length > 0) {
+      const refreshInterval = setInterval(() => {
+        addDebugLog("Periodic refresh of lobby members");
+        sendMessage({ type: 'get_lobby_members', code: lobbyId });
+      }, 10000); // Refresh every 10 seconds
+
+      return () => clearInterval(refreshInterval);
+    }
+  }, [wsStatus, lobbyId, sendMessage, isInitialized, players.length]);
 
   useEffect(() => {
     if (!lastMessage) return;
     try {
       const msg = JSON.parse(lastMessage);
-      console.log("Processing message in WaitlistPage:", msg);
+      addDebugLog(`Processing message: ${msg.type}`);
 
       // Set currentUserId if it's not set yet
       if (!currentUserId) {
         const storedId = localStorage.getItem('userId');
         if (storedId) {
-          console.log("Setting currentUserId from localStorage:", storedId);
+          addDebugLog(`Setting currentUserId from localStorage: ${storedId}`);
           setCurrentUserId(storedId);
         }
       }
 
       if (msg.type === 'lobby_members' && msg.code === lobbyId) {
-        console.log("Received lobby_members:", msg.members);
+        addDebugLog(`Received lobby_members: ${JSON.stringify(msg.members)}`);
+
+        // Get stored username for consistency
+        const storedUsername = localStorage.getItem('currentUsername');
+        const storedUserId = localStorage.getItem('userId');
 
         // Map the members to players with proper structure
-        const updatedPlayers = msg.members.map(p => ({
-          id: p.userId,
-          name: p.username || `Player ${p.userId.substring(0, 4)}`,
-          isHost: p.isHost || false,
-          isReady: !!p.isReady
-        }));
+        const updatedPlayers = msg.members.map(p => {
+          let displayName = p.username || `Player ${p.userId?.substring(0, 4) || 'Unknown'}`;
+          
+          // Use stored username if this is the current user and we have it stored
+          if (p.userId === storedUserId && storedUsername) {
+            displayName = storedUsername;
+          }
+
+          return {
+            id: p.userId,
+            name: displayName,
+            isHost: p.isHost || false,
+            isReady: !!p.isReady,
+            class: p.class || 'pistol'
+          };
+        });
 
         setPlayers(updatedPlayers);
-        console.log("Updated players:", updatedPlayers);
+        setIsInitialized(true);
+        addDebugLog(`Updated players: ${JSON.stringify(updatedPlayers)}`);
 
         // If we don't have a currentUserId yet, try to get it from localStorage
         if (!currentUserId) {
           const storedId = localStorage.getItem('userId');
           if (storedId) {
-            console.log("Setting currentUserId from localStorage after receiving lobby_members:", storedId);
+            addDebugLog(`Setting currentUserId from localStorage after receiving lobby_members: ${storedId}`);
             setCurrentUserId(storedId);
           }
         }
       }
       // Also update players on lobby_state_update (for ready state changes)
       else if (msg.type === 'lobby_state_update') {
-        setPlayers(msg.players.map(p => ({
-          id: p.userId || p.id,
-          name: p.username || `Player ${(p.userId || p.id)?.substring(0, 4)}`,
-          isHost: p.isHost || false,
-          isReady: !!p.isReady
-        })));
-        setLobbyName(msg.lobbyName);
-        setCurrentUserId(msg.currentUserId);
+        const storedUsername = localStorage.getItem('currentUsername');
+        const storedUserId = localStorage.getItem('userId');
+        
+        const updatedPlayers = msg.players.map(p => {
+          let displayName = p.username || `Player ${(p.userId || p.id)?.substring(0, 4) || 'Unknown'}`;
+          
+          // Use stored username if this is the current user and we have it stored
+          if ((p.userId || p.id) === storedUserId && storedUsername) {
+            displayName = storedUsername;
+          }
+          
+          return {
+            id: p.userId || p.id,
+            name: displayName,
+            isHost: p.isHost || false,
+            isReady: !!p.isReady,
+            class: p.class || 'pistol'
+          };
+        });
+        
+        setPlayers(updatedPlayers);
+        setLobbyName(msg.lobbyName || 'Game Lobby');
+        
+        if (msg.currentUserId) {
+          setCurrentUserId(msg.currentUserId);
+        }
+        addDebugLog("Updated from lobby_state_update");
       } 
       else if (msg.type === 'game_start_countdown') {
         setIsStarting(true);
         setCountdown(msg.countdown);
+        addDebugLog("Game countdown started");
       } 
       else if (msg.type === 'game_started') {
+        addDebugLog("Game started, navigating to game page");
         navigate(`/game/${lobbyId}`);
       }
+      else if (msg.type === 'lobby_error') {
+        addDebugLog(`Lobby error: ${msg.message}`);
+      }
     } catch (e) {
-      console.error("Failed to parse WebSocket message:", e);
+      addDebugLog(`Failed to parse WebSocket message: ${e.message}`);
     }
   }, [lastMessage, lobbyId, navigate, currentUserId]);
-
 
   useEffect(() => {
     let timerId;
@@ -156,7 +247,12 @@ const WaitlistPage = () => {
 
   // --- EVENT HANDLERS (to be passed down as props) ---
   const handleReadyToggle = () => {
-    if (!currentUserId || !lobbyId) return;
+    if (!currentUserId || !lobbyId) {
+      addDebugLog("Cannot toggle ready: missing currentUserId or lobbyId");
+      return;
+    }
+
+    addDebugLog(`Toggling ready state for user: ${currentUserId} in lobby: ${lobbyId}`);
 
     // Send a message to the WebSocket to update readiness on the server
     sendMessage({
@@ -173,7 +269,15 @@ const WaitlistPage = () => {
   };
 
   const handleNameChange = (newName) => {
-    if (!currentUserId || !lobbyId) return;
+    if (!currentUserId || !lobbyId) {
+      addDebugLog("Cannot change name: missing currentUserId or lobbyId");
+      return;
+    }
+
+    addDebugLog(`Changing name for user: ${currentUserId} to: ${newName}`);
+
+    // Store the new username in localStorage for consistency
+    localStorage.setItem('currentUsername', newName);
 
     // Send a message to the WebSocket to update name on the server
     sendMessage({
@@ -201,6 +305,51 @@ const WaitlistPage = () => {
     setIsStarting(false);
     // Ideally, send a 'cancel_start' message to the WebSocket here
   };
+
+  const handleRetryConnection = () => {
+    addDebugLog("Manual retry requested");
+    setRetryCount(0);
+    setIsInitialized(false);
+    sendMessage({ type: 'get_lobby_members', code: lobbyId });
+  };
+
+  // Show loading state while initializing or if stuck
+  if (!isInitialized || (wsStatus === 'open' && players.length === 0 && retryCount < 5)) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0f051d] via-[#1f152b] to-[#0f051d] relative overflow-hidden">
+        <BackgroundDecorations />
+        
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center px-4">
+            <div className="bg-gradient-to-br from-[#1f152b] to-[#0f051d] rounded-3xl p-8 border border-[#2a3441]/30 max-w-md mx-auto">
+              <div className="w-8 h-8 border-2 border-[#e971ff] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-[#b7b4bb] mb-2">Loading battle data...</p>
+              <p className="text-[#b7b4bb] text-sm mb-4">Connecting to lobby {lobbyId?.toUpperCase()}</p>
+              
+              {/* Debug information */}
+              <div className="text-left bg-black/30 rounded p-3 text-xs text-gray-400 mb-4 max-h-32 overflow-y-auto">
+                <div className="font-bold mb-1">Debug Info:</div>
+                {debugInfo.map((info, index) => (
+                  <div key={index}>{info}</div>
+                ))}
+              </div>
+              
+              <div className="text-xs text-[#b7b4bb] mb-4">
+                WebSocket: {wsStatus} | Retries: {retryCount}/5
+              </div>
+              
+              <Button 
+                onClick={handleRetryConnection}
+                className="bg-gradient-to-r from-[#741ff5] to-[#9351f7] text-white px-4 py-2 rounded-lg text-sm"
+              >
+                Retry Connection
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0f051d] via-[#1f152b] to-[#0f051d] relative overflow-hidden">
@@ -245,8 +394,8 @@ const WaitlistPage = () => {
             currentUser={
               currentUser || {
                 id: currentUserId,
-                name: "You",
-                isHost: true,
+                name: localStorage.getItem('currentUsername') || "You",
+                isHost: false,
                 isReady: false,
               }
             }
