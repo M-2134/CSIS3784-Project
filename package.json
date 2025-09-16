@@ -4,8 +4,9 @@
     "description": "Lazer Tag application with React frontend and Node.js backend",
     "main": "index.js",
     "scripts": {
-        "start": "concurrently \"npm run start --prefix backend\" \"npm run start --prefix frontend\"",
-        "install-all": "npm install && npm install --prefix backend && npm install --prefix frontend",
+        "start-backend-delayed": "node -e \"setTimeout(()=>{ const cmd = process.platform === 'win32' ? 'npm.cmd' : 'npm'; const cp = require('child_process'); cp.spawn(cmd, ['run','start','--prefix','backend'], { stdio: 'inherit', shell: true }); }, 2000)\"",
+        "start": "concurrently \"npm run start --prefix frontend\" \"npm run start-backend-delayed\"",
+        "install-all": "npm install && npm install --prefix frontend && npm install --prefix backend",
         "postinstall": "npm run install-all",
         "build": "npm run build --prefix frontend && npm run build --prefix backend"
     },
