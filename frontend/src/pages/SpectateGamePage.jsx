@@ -3,12 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useWebSocket } from '../WebSocketContext';
 import Leaderboard from '../components/Leaderboard';
 import BackgroundDecorations from "../components/BackgroundDecorations"
-import { ArrowLeft, Users, Target, Zap, Activity, Crown, Crosshair, Shield } from "lucide-react"
+import { ArrowLeft, Users, Target, Zap, Activity, Crown, Crosshair, Shield, Eye, Wifi } from "lucide-react"
 
 
 /**
  * A mobile-first, responsive page for spectating a game.
- * It displays a live leaderboard of players' scores.
+ * It displays a live leaderboard of players' scores and shows the live feed of the leading player.
  */
 const SpectateGamePage = () => {
   const { lobbyId } = useParams();
@@ -34,8 +34,12 @@ const SpectateGamePage = () => {
             name: p.name || p.username || `Player ${(p.id || p.userId)?.substring(0, 4)}`,
             score: p.score || 0,
             role: p.role,
-            ready: p.ready || false
+            ready: p.ready || false,
+            class: p.class || 'pistol'
           }));
+
+          // Sort players by score (highest first) 
+          const sortedPlayers = simplePlayers.sort((a, b) => b.score - a.score);
 
           // Track score changes for live actions
           simplePlayers.forEach((player) => {
@@ -62,10 +66,14 @@ const SpectateGamePage = () => {
             previousScores.current[player.id] = player.score
           })
 
-          setPlayers(simplePlayers);
-          // If no spectatingPlayer or spectatingPlayer is gone, pick the first player
-          if (!spectatingPlayer || !simplePlayers.some(p => p.id === spectatingPlayer.id)) {
-            setSpectatingPlayer(simplePlayers[0] || null);
+          setPlayers(sortedPlayers);
+          
+          // Auto-spectate the player with the highest score
+          if (sortedPlayers.length > 0) {
+            const leadingPlayer = sortedPlayers[0];
+            if (!spectatingPlayer || spectatingPlayer.id !== leadingPlayer.id) {
+              setSpectatingPlayer(leadingPlayer);
+            }
           }
         }
 
@@ -245,81 +253,205 @@ const SpectateGamePage = () => {
         </div>
       </header>
 
+      {/* Main Content */}
       <div className="px-4 md:px-6 lg:px-8 pb-6 relative z-10">
-        {/* Game Status Header */}
-        <div className="mb-6 md:mb-8">
-          <div className="text-center mb-6">
-            <h1 className="text-white text-3xl md:text-4xl lg:text-5xl font-bold mb-2">Spectating: Game {lobbyId}</h1>
-            <p className="text-[#b7b4bb] text-lg md:text-xl">Watch the action unfold in real-time</p>
-          </div>
+        {/* Hero Section */}
+        <div className="text-center mb-6 md:mb-8">
+          <h1 className="text-white text-3xl md:text-4xl font-bold mb-2">
+            <span className="block">Spectating</span>
+            <span className="block text-[#e971ff]">Game {lobbyId}</span>
+          </h1>
+          <p className="text-[#b7b4bb] text-base md:text-lg">Watch the battle unfold in real-time</p>
+        </div>
 
-          {/* Lobby Summary */}
-          {lobbyInfo && (
-            <div className="max-w-4xl mx-auto mb-6">
-              <div className="bg-gradient-to-br from-[#1f152b] to-[#0f051d] rounded-xl p-4 border border-[#2a3441]/30">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-                  <div>
-                    <div className="text-[#b7b4bb] text-sm mb-1">Lobby Host</div>
-                    <div className="text-white font-semibold">{lobbyInfo.host}</div>
+        {/* Live Feed Section */}
+        {spectatingPlayer && (
+          <div className="max-w-4xl mx-auto mb-8">
+            <div className="bg-gradient-to-br from-[#1f152b] to-[#0f051d] rounded-2xl p-4 md:p-6 border-2 border-[#9351f7]/40 shadow-xl">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                  <h2 className="text-white text-xl md:text-2xl font-bold">Live Feed</h2>
+                </div>
+                <div className="flex items-center gap-2 text-[#e971ff]">
+                  <Eye size={20} />
+                  <span className="text-sm font-medium">Leading Player</span>
+                </div>
+              </div>
+
+              {/* Player Camera Feed Placeholder */}
+              <div className="aspect-video bg-gradient-to-br from-[#0f051d] to-[#1f152b] rounded-xl mb-4 flex items-center justify-center border-2 border-[#2a3441]/30 relative overflow-hidden">
+                {/* Simulated camera feed background */}
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-900/20 via-purple-900/20 to-pink-900/20"></div>
+                
+                {/* Crosshair overlay */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-12 h-12 relative">
+                    <div className="absolute left-1/2 top-0 w-0.5 h-3 bg-red-500" style={{transform: 'translateX(-50%)'}}></div>
+                    <div className="absolute left-1/2 bottom-0 w-0.5 h-3 bg-red-500" style={{transform: 'translateX(-50%)'}}></div>
+                    <div className="absolute top-1/2 left-0 h-0.5 w-3 bg-red-500" style={{transform: 'translateY(-50%)'}}></div>
+                    <div className="absolute top-1/2 right-0 h-0.5 w-3 bg-red-500" style={{transform: 'translateY(-50%)'}}></div>
+                    <div className="w-2 h-2 rounded-full border border-red-500 bg-red-500/30 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"></div>
                   </div>
-                  <div>
-                    <div className="text-[#b7b4bb] text-sm mb-1">Active Players</div>
-                    <div className="text-white font-semibold">{players.length}</div>
-                  </div>
-                  <div>
-                    <div className="text-[#b7b4bb] text-sm mb-1">Game Status</div>
-                    <div className={`font-semibold ${getGameStatusColor()}`}>{getGameStatusText()}</div>
+                </div>
+
+                {/* Live indicator */}
+                <div className="absolute top-4 left-4 flex items-center gap-2 bg-black/50 rounded-lg px-3 py-1">
+                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                  <span className="text-white text-sm font-bold">LIVE</span>
+                </div>
+
+                {/* Player info overlay */}
+                <div className="absolute bottom-4 left-4 right-4">
+                  <div className="bg-black/70 rounded-lg p-3 backdrop-blur-sm">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <Crown size={20} className="text-yellow-400" />
+                          <span className="text-white font-bold text-lg">{spectatingPlayer.name}</span>
+                        </div>
+                        <div className="flex items-center gap-2 px-2 py-1 bg-[#9351f7]/30 rounded-full">
+                          {getWeaponIcon(spectatingPlayer.class)}
+                          <span className={`text-sm font-medium ${getWeaponColor(spectatingPlayer.class)}`}>
+                            {getWeaponName(spectatingPlayer.class)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[#e971ff] text-2xl font-bold">{spectatingPlayer.score}</div>
+                        <div className="text-[#b7b4bb] text-xs">points</div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* Enhanced Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
-            <div className="bg-gradient-to-br from-[#1f152b] to-[#0f051d] rounded-xl p-4 border border-[#2a3441]/30">
-              <div className="flex items-center gap-2 mb-2">
-                <Users size={20} className="text-[#e971ff]" />
-                <span className="text-[#b7b4bb] text-sm">Players</span>
+              {/* Camera controls */}
+              <div className="flex items-center justify-center gap-2">
+                <div className="flex items-center gap-2 text-[#b7b4bb] text-sm">
+                  <Wifi size={16} className="text-green-400" />
+                  <span>Connected to {spectatingPlayer.name}'s feed</span>
+                </div>
               </div>
-              <div className="text-white text-xl md:text-2xl font-bold">{players.length}</div>
-            </div>
-
-            <div className="bg-gradient-to-br from-[#1f152b] to-[#0f051d] rounded-xl p-4 border border-[#2a3441]/30">
-              <div className="flex items-center gap-2 mb-2">
-                <Target size={20} className="text-[#e971ff]" />
-                <span className="text-[#b7b4bb] text-sm">Total Hits</span>
-              </div>
-              <div className="text-white text-xl md:text-2xl font-bold">
-                {players.reduce((sum, p) => sum + Math.floor(p.score / getPointsPerHit(p.class)), 0)}
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-[#1f152b] to-[#0f051d] rounded-xl p-4 border border-[#2a3441]/30">
-              <div className="flex items-center gap-2 mb-2">
-                <Activity size={20} className="text-[#e971ff]" />
-                <span className="text-[#b7b4bb] text-sm">Top Score</span>
-              </div>
-              <div className="text-white text-xl md:text-2xl font-bold">
-                {players.length > 0 ? Math.max(...players.map((p) => p.score)) : 0}
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-[#1f152b] to-[#0f051d] rounded-xl p-4 border border-[#2a3441]/30">
-              <div className="flex items-center gap-2 mb-2">
-                <Zap size={20} className="text-[#e971ff]" />
-                <span className="text-[#b7b4bb] text-sm">Live Actions</span>
-              </div>
-              <div className="text-white text-xl md:text-2xl font-bold">{liveActions.length}</div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Main Content Grid */}
+        {/* Stats and Leaderboard Grid */}
         <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Enhanced Stats Cards */}
+          <div className="lg:col-span-3 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+              <div className="bg-gradient-to-br from-[#1f152b] to-[#0f051d] rounded-xl p-4 border border-[#2a3441]/30">
+                <div className="flex items-center gap-2 mb-2">
+                  <Users size={20} className="text-[#e971ff]" />
+                  <span className="text-[#b7b4bb] text-sm">Players</span>
+                </div>
+                <div className="text-white text-xl md:text-2xl font-bold">{players.length}</div>
+              </div>
+
+              <div className="bg-gradient-to-br from-[#1f152b] to-[#0f051d] rounded-xl p-4 border border-[#2a3441]/30">
+                <div className="flex items-center gap-2 mb-2">
+                  <Target size={20} className="text-[#e971ff]" />
+                  <span className="text-[#b7b4bb] text-sm">Total Hits</span>
+                </div>
+                <div className="text-white text-xl md:text-2xl font-bold">
+                  {players.reduce((sum, p) => sum + Math.floor(p.score / getPointsPerHit(p.class)), 0)}
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-[#1f152b] to-[#0f051d] rounded-xl p-4 border border-[#2a3441]/30">
+                <div className="flex items-center gap-2 mb-2">
+                  <Activity size={20} className="text-[#e971ff]" />
+                  <span className="text-[#b7b4bb] text-sm">Top Score</span>
+                </div>
+                <div className="text-white text-xl md:text-2xl font-bold">
+                  {players.length > 0 ? Math.max(...players.map((p) => p.score)) : 0}
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-[#1f152b] to-[#0f051d] rounded-xl p-4 border border-[#2a3441]/30">
+                <div className="flex items-center gap-2 mb-2">
+                  <Zap size={20} className="text-[#e971ff]" />
+                  <span className="text-[#b7b4bb] text-sm">Live Actions</span>
+                </div>
+                <div className="text-white text-xl md:text-2xl font-bold">{liveActions.length}</div>
+              </div>
+            </div>
+          </div>
+
           {/* Enhanced Leaderboard */}
           <div className="lg:col-span-2">
-            <Leaderboard players={getEnhancedPlayers()} showDetailedStats={true} />
+            <div className="bg-gradient-to-br from-[#1f152b] to-[#0f051d] rounded-2xl p-4 md:p-6 border border-[#2a3441]/30 shadow-xl">
+              <div className="flex items-center gap-3 mb-6">
+                <Crown size={24} className="text-[#e971ff]" />
+                <h3 className="text-white text-xl md:text-2xl font-bold">Live Leaderboard</h3>
+                <div className="w-2 h-2 bg-[#e971ff] rounded-full animate-pulse ml-auto"></div>
+              </div>
+              
+              <div className="space-y-3">
+                {getEnhancedPlayers().map((player, index) => {
+                  const isSpectating = spectatingPlayer && spectatingPlayer.id === player.id;
+                  return (
+                    <div
+                      key={player.id}
+                      onClick={() => handleSelectPlayer(player)}
+                      className={`
+                        relative p-4 rounded-xl border-2 transition-all duration-300 cursor-pointer hover:scale-[1.02]
+                        ${
+                          isSpectating
+                            ? "bg-gradient-to-r from-[#e971ff]/20 to-[#9351f7]/20 border-[#e971ff]/50 shadow-lg shadow-[#e971ff]/20"
+                            : index === 0
+                              ? "bg-gradient-to-r from-yellow-500/20 to-amber-400/20 border-yellow-400/50"
+                              : "bg-gradient-to-r from-[#741ff5]/10 to-[#9351f7]/10 border-[#9351f7]/30 hover:border-[#e971ff]/50"
+                        }
+                      `}
+                    >
+                      {/* Rank Badge */}
+                      <div className="absolute -top-2 -left-2 w-8 h-8 rounded-full bg-gradient-to-r from-[#741ff5] to-[#9351f7] flex items-center justify-center shadow-lg">
+                        <span className="text-white text-sm font-bold">{index + 1}</span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          {index === 0 ? <Crown size={20} className="text-yellow-400" /> : getWeaponIcon(player.class)}
+                          
+                          <div className="min-w-0 flex-1">
+                            <div className="text-white font-bold text-lg truncate">{player.name}</div>
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className={`${getWeaponColor(player.class)} font-medium`}>{player.weapon}</span>
+                              <span className="text-[#b7b4bb]">•</span>
+                              <span className="text-[#b7b4bb]">{player.hits} hits</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="text-right ml-4 flex-shrink-0">
+                          <div className="text-white text-xl font-bold">
+                            {player.score?.toLocaleString() || 0}
+                          </div>
+                          <div className="text-[#b7b4bb] text-xs">points</div>
+                        </div>
+                      </div>
+
+                      {isSpectating && (
+                        <div className="absolute top-2 right-2 flex items-center gap-1 bg-[#e971ff]/80 px-2 py-1 rounded-full">
+                          <Eye size={12} className="text-white" />
+                          <span className="text-white text-xs font-bold">LIVE</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {players.length === 0 && (
+                <div className="text-center py-8">
+                  <div className="text-[#b7b4bb] text-lg mb-2">No players in battle</div>
+                  <div className="text-[#b7b4bb] text-sm">Waiting for warriors to join...</div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Live Actions Feed */}
@@ -327,7 +459,7 @@ const SpectateGamePage = () => {
             <div className="bg-gradient-to-br from-[#1f152b] to-[#0f051d] rounded-2xl p-4 md:p-6 border border-[#2a3441]/30 shadow-xl">
               <div className="flex items-center gap-3 mb-4">
                 <Zap size={24} className="text-[#e971ff]" />
-                <h3 className="text-white text-lg md:text-xl font-bold">Live Actions</h3>
+                <h3 className="text-white text-lg md:text-xl font-bold">Live Feed</h3>
                 <div className="w-2 h-2 bg-[#e971ff] rounded-full animate-pulse ml-auto"></div>
               </div>
 
@@ -336,7 +468,7 @@ const SpectateGamePage = () => {
                   liveActions.map((action) => (
                     <div
                       key={action.id}
-                      className="flex items-start gap-3 p-3 bg-gradient-to-r from-[#741ff5]/20 to-transparent rounded-lg"
+                      className="flex items-start gap-3 p-3 bg-gradient-to-r from-[#741ff5]/20 to-transparent rounded-lg border border-[#9351f7]/20"
                     >
                       <div className="flex-shrink-0 mt-0.5">{action.icon}</div>
                       <div className="flex-1 min-w-0">
@@ -359,7 +491,7 @@ const SpectateGamePage = () => {
                 ) : (
                   <div className="text-center py-8">
                     <div className="text-[#b7b4bb] text-sm">No recent activity</div>
-                    <div className="text-[#b7b4bb] text-xs mt-1">Actions will appear here during gameplay</div>
+                    <div className="text-[#b7b4bb] text-xs mt-1">Actions will appear during gameplay</div>
                   </div>
                 )}
               </div>
