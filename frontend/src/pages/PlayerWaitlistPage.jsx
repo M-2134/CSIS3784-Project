@@ -230,19 +230,39 @@ const PlayerWaitlistPage = ({ players, currentUser, lobbyCode, isStarting, count
     }
   };
   
-  // Function to handle ready toggle with WebSocket
+  // Enhanced function to handle ready toggle with WebSocket - Fixed for host
   const handleReadyToggle = () => {
-    if (currentUser && lobbyCode) {
-      console.log("PlayerWaitlistPage: Toggling ready state for user:", currentUser.id, "current ready:", currentUser.isReady);
-      
-      sendMessage({ 
-        type: 'set_ready', 
-        code: lobbyCode,
-        ready: !currentUser.isReady 
-      });
-    } else {
+    if (!currentUser || !lobbyCode) {
       console.log("PlayerWaitlistPage: Cannot toggle ready - missing currentUser or lobbyCode");
-      // Fall back to the passed onReadyToggle if no WebSocket or missing data
+      console.log("currentUser:", currentUser);
+      console.log("lobbyCode:", lobbyCode);
+      return;
+    }
+
+    // Get the actual userId from localStorage to ensure we're using the correct ID
+    const storedUserId = localStorage.getItem('userId');
+    const userIdToUse = storedUserId || currentUser.id;
+    
+    console.log("PlayerWaitlistPage: Toggling ready state");
+    console.log("- User ID:", userIdToUse);
+    console.log("- Current ready state:", currentUser.isReady);
+    console.log("- Is host:", currentUser.isHost);
+    console.log("- Lobby code:", lobbyCode);
+    
+    // Send WebSocket message with explicit user identification
+    const readyMessage = {
+      type: 'set_ready', 
+      code: lobbyCode,
+      userId: userIdToUse, // Explicitly include userId
+      ready: !currentUser.isReady
+    };
+    
+    console.log("Sending ready message:", readyMessage);
+    sendMessage(readyMessage);
+
+    // Also try the fallback method in case WebSocket has issues
+    if (onReadyToggle && typeof onReadyToggle === 'function') {
+      console.log("Also calling fallback onReadyToggle");
       onReadyToggle();
     }
   };
@@ -317,6 +337,19 @@ const PlayerWaitlistPage = ({ players, currentUser, lobbyCode, isStarting, count
 
   return (
     <div className="space-y-4 px-4">
+      {/* Debug information for host ready issue */}
+      {process.env.NODE_ENV === 'development' && currentUser?.isHost && (
+        <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-3 text-xs">
+          <div className="text-red-300 font-bold mb-1">Debug - Host Ready Info:</div>
+          <div className="text-red-200">User ID: {currentUser.id}</div>
+          <div className="text-red-200">Stored User ID: {localStorage.getItem('userId')}</div>
+          <div className="text-red-200">Is Host: {currentUser.isHost ? 'Yes' : 'No'}</div>
+          <div className="text-red-200">Is Ready: {currentUser.isReady ? 'Yes' : 'No'}</div>
+          <div className="text-red-200">Face Scan Complete: {isFaceScanComplete ? 'Yes' : 'No'}</div>
+          <div className="text-red-200">WebSocket Status: {wsStatus}</div>
+        </div>
+      )}
+
       {/* Mobile-first status indicators - modified to show READY when ready, countdown when not ready */}
       {currentUser?.isReady ? (
         <div className="fixed top-4 right-4 z-50">
