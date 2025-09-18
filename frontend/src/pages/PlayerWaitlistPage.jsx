@@ -337,19 +337,6 @@ const PlayerWaitlistPage = ({ players, currentUser, lobbyCode, isStarting, count
 
   return (
     <div className="space-y-4 px-4">
-      {/* Debug information for host ready issue */}
-      {process.env.NODE_ENV === 'development' && currentUser?.isHost && (
-        <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-3 text-xs">
-          <div className="text-red-300 font-bold mb-1">Debug - Host Ready Info:</div>
-          <div className="text-red-200">User ID: {currentUser.id}</div>
-          <div className="text-red-200">Stored User ID: {localStorage.getItem('userId')}</div>
-          <div className="text-red-200">Is Host: {currentUser.isHost ? 'Yes' : 'No'}</div>
-          <div className="text-red-200">Is Ready: {currentUser.isReady ? 'Yes' : 'No'}</div>
-          <div className="text-red-200">Face Scan Complete: {isFaceScanComplete ? 'Yes' : 'No'}</div>
-          <div className="text-red-200">WebSocket Status: {wsStatus}</div>
-        </div>
-      )}
-
       {/* Mobile-first status indicators - modified to show READY when ready, countdown when not ready */}
       {currentUser?.isReady ? (
         <div className="fixed top-4 right-4 z-50">

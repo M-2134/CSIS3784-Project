@@ -151,17 +151,27 @@ const WaitlistPage = () => {
       if (msg.type === 'lobby_members' && msg.code === lobbyId) {
         addDebugLog(`Received lobby_members: ${JSON.stringify(msg.members)}`);
 
-        // Get stored username for consistency
+        // Get stored username for consistency - but only for fallback, prefer server data
         const storedUsername = localStorage.getItem('currentUsername');
         const storedUserId = localStorage.getItem('userId');
 
         // Map the members to players with proper structure
         const updatedPlayers = msg.members.map(p => {
-          let displayName = p.username || `Player ${p.userId?.substring(0, 4) || 'Unknown'}`;
+          // FIXED: Always prefer server username first, only fallback to stored username if server has null/empty
+          let displayName;
           
-          // Use stored username if this is the current user and we have it stored
-          if (p.userId === storedUserId && storedUsername) {
+          if (p.username && p.username.trim()) {
+            // Server has a valid username, use it
+            displayName = p.username.trim();
+            addDebugLog(`Using server username for ${p.userId}: ${displayName}`);
+          } else if (p.userId === storedUserId && storedUsername) {
+            // Server username is null/empty but this is current user with stored username
             displayName = storedUsername;
+            addDebugLog(`Using stored username for current user ${p.userId}: ${displayName}`);
+          } else {
+            // Fallback to generic name
+            displayName = `Player ${p.userId?.substring(0, 4) || 'Unknown'}`;
+            addDebugLog(`Using fallback username for ${p.userId}: ${displayName}`);
           }
 
           return {
@@ -192,11 +202,15 @@ const WaitlistPage = () => {
         const storedUserId = localStorage.getItem('userId');
         
         const updatedPlayers = msg.players.map(p => {
-          let displayName = p.username || `Player ${(p.userId || p.id)?.substring(0, 4) || 'Unknown'}`;
+          // FIXED: Same logic as above - prefer server username
+          let displayName;
           
-          // Use stored username if this is the current user and we have it stored
-          if ((p.userId || p.id) === storedUserId && storedUsername) {
+          if (p.username && p.username.trim()) {
+            displayName = p.username.trim();
+          } else if ((p.userId || p.id) === storedUserId && storedUsername) {
             displayName = storedUsername;
+          } else {
+            displayName = `Player ${(p.userId || p.id)?.substring(0, 4) || 'Unknown'}`;
           }
           
           return {
