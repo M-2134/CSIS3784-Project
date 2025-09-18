@@ -1,7 +1,23 @@
 const WebSocket = require('ws');
 const http = require('http');
 
-const server = http.createServer();
+const server = http.createServer((req, res) => {
+    // Health check endpoint for Render
+    if (req.url === '/health' || req.url === '/') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            status: 'ok',
+            service: 'hyperblast-backend',
+            timestamp: new Date().toISOString(),
+            players: Object.keys(players).length,
+            lobbies: Object.keys(lobbies).length
+        }));
+        return;
+    }
+
+    res.writeHead(404);
+    res.end('Not found');
+});
 const wss = new WebSocket.Server({ server });
 const port = process.env.PORT || 8080;
 
