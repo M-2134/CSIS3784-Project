@@ -60,7 +60,10 @@ const WaitlistPage = () => {
         addDebugLog(`Setting currentUserId from localStorage: ${storedId}`);
         setCurrentUserId(storedId);
       } else {
-        addDebugLog("No userId found in localStorage");
+        addDebugLog("No userId found in localStorage - clearing potentially stale data");
+        // Clear potentially stale localStorage data when no userId is found
+        localStorage.removeItem('currentUsername');
+        localStorage.removeItem('playerClass');
       }
 
       // Get stored username if available
@@ -138,6 +141,28 @@ const WaitlistPage = () => {
     try {
       const msg = JSON.parse(lastMessage);
       addDebugLog(`Processing message: ${msg.type}`);
+
+      // Handle welcome message and detect server restart
+      if (msg.type === 'welcome' && msg.userId) {
+        const storedUserId = localStorage.getItem('userId');
+        if (storedUserId && storedUserId !== msg.userId) {
+          addDebugLog(`Server assigned new userId ${msg.userId}, clearing stale data`);
+          // Server has restarted and assigned a new userId - clear stale data
+          localStorage.removeItem('currentUsername');
+          localStorage.removeItem('playerClass');
+          // Clear any lobby-specific data as well
+          Object.keys(localStorage).forEach(key => {
+            if (key.startsWith('playerFaces_') || key.startsWith('playerIdentities_')) {
+              localStorage.removeItem(key);
+            }
+          });
+        }
+        
+        // Update stored userId to the new one
+        localStorage.setItem('userId', msg.userId);
+        setCurrentUserId(msg.userId);
+        addDebugLog(`Set userId to: ${msg.userId}`);
+      }
 
       // Set currentUserId if it's not set yet
       if (!currentUserId) {
