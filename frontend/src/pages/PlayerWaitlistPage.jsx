@@ -114,9 +114,10 @@ const PlayerWaitlistPage = ({ players, currentUser, lobbyCode, isStarting, count
       setAutoCountdownActive(true);
       setShowScanFaceWarning(false);
     }
-    // If player went from not ready to ready, the countdown will pause automatically
+    // If player went from not ready to ready, stop the countdown completely
     else if (!wasReady && isNowReady) {
-      console.log("Player went from not ready to ready, countdown will pause");
+      console.log("Player went from not ready to ready, stopping countdown");
+      setAutoCountdownActive(false);
       setShowScanFaceWarning(false);
     }
     
