@@ -23,32 +23,20 @@ const JoinLobbyPage = () => {
     if (!lastMessage) return;
     try {
       const msg = JSON.parse(lastMessage);
-      console.log("JoinLobbyPage received message:", msg);
-      
+      console.log(msg);
       if (msg.type === 'lobby_joined') {
         setIsLoading(false);
-        console.log("Successfully joined lobby, navigating to waitlist");
-        
-        // Store username in localStorage for the waitlist page
-        localStorage.setItem('currentUsername', username.trim());
-        
         // Use the code from the message, or fallback to the entered code
         const code = msg.code || lobbyCode.trim().toUpperCase();
-        
-        // Small delay to ensure backend state is ready
-        setTimeout(() => {
-          navigate(`/lobby/${code}/waitlist`);
-        }, 500);
+        navigate(`/lobby/${code}/waitlist`);
       } else if (msg.type === 'lobby_error') {
         setIsLoading(false);
-        console.error("Join lobby error:", msg.message);
         alert(msg.message || 'Failed to join lobby.');
       }
     } catch (e) {
-       console.error("Error parsing message in JoinLobbyPage:", e);
        setIsLoading(false)
     }
-  }, [lastMessage, navigate, lobbyCode, username]);
+  }, [lastMessage, navigate, lobbyCode]);
 
   const handleJoinByCode = () => {
     if (!lobbyCode.trim() || !username.trim()) {
@@ -56,23 +44,7 @@ const JoinLobbyPage = () => {
       return;
     }
 
-    // Check WebSocket connection status
-    if (wsStatus !== 'open') {
-      alert('Connection not ready. Please wait for connection to establish.');
-      return;
-    }
-
-    // Make sure we have a userId
-    const userId = localStorage.getItem('userId');
-    if (!userId) {
-      alert('Connection not properly established. Please refresh and try again.');
-      return;
-    }
-
-    setIsLoading(true)
-
-    // Store username immediately in localStorage
-    localStorage.setItem('currentUsername', username.trim());
+     setIsLoading(true)
 
     const joinData = {
       type: 'join_lobby',
@@ -84,16 +56,7 @@ const JoinLobbyPage = () => {
     localStorage.setItem('playerClass', selectedClass.toLowerCase());
     console.log("Joining Lobby with data:", joinData);
     sendMessage(joinData);
-    
-    // Add timeout fallback in case we don't get a response
-    setTimeout(() => {
-      if (isLoading) {
-        console.warn("Join lobby timeout, but will continue to navigation");
-        setIsLoading(false);
-        // Navigate anyway as sometimes the WebSocket message is missed
-        navigate(`/lobby/${lobbyCode.trim().toUpperCase()}/waitlist`);
-      }
-    }, 5000);
+    navigate(`/lobby/${lobbyCode.trim().toUpperCase()}/waitlist`);
   };
 
   return (
@@ -186,9 +149,9 @@ const JoinLobbyPage = () => {
               {/* Join Button */}
               <Button
                 type="submit"
-                disabled={isLoading || !lobbyCode.trim() || !username.trim() || wsStatus !== 'open'}
+                disabled={isLoading || !lobbyCode.trim() || !username.trim()}
                 className={`flex items-center justify-center gap-2 ${
-                  isLoading || wsStatus !== 'open'
+                  isLoading
                     ? "bg-gradient-to-r from-[#7b7583] to-[#838383] cursor-not-allowed"
                     : "bg-gradient-to-r from-[#741ff5] to-[#9351f7] hover:from-[#9351f7] hover:to-[#e971ff]"
                 }`}

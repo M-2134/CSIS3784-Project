@@ -1,23 +1,7 @@
 const WebSocket = require('ws');
 const http = require('http');
 
-const server = http.createServer((req, res) => {
-    // Health check endpoint for Render
-    if (req.url === '/health' || req.url === '/') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-            status: 'ok',
-            service: 'hyperblast-backend',
-            timestamp: new Date().toISOString(),
-            players: Object.keys(players).length,
-            lobbies: Object.keys(lobbies).length
-        }));
-        return;
-    }
-
-    res.writeHead(404);
-    res.end('Not found');
-});
+const server = http.createServer();
 const wss = new WebSocket.Server({ server });
 const port = process.env.PORT || 8080;
 
@@ -159,19 +143,7 @@ function joinLobby(userId, code, playerClass = "pistol") {
         // Print to console
         console.log(`User ${userId} joined lobby ${code} as class ${playerClass}`);
 
-        // Broadcast updated lobby members to all clients in the same lobby immediately
-        broadcastToLobby(code, "lobby_members", {
-            code,
-            members: lobbies[code].players.map(uid => ({
-                userId: uid,
-                username: players[uid]?.username || null,
-                isHost: lobbies[code].host === uid,
-                isReady: players[uid]?.ready || false,
-                class: players[uid]?.class || "pistol"
-            }))
-        });
-        
-        // Also send again after a delay to ensure frontend gets the update
+        // Broadcast updated lobby members to all clients in the same lobby
         setTimeout(() => {
             broadcastToLobby(code, "lobby_members", {
                 code,
@@ -183,7 +155,17 @@ function joinLobby(userId, code, playerClass = "pistol") {
                     class: players[uid]?.class || "pistol"
                 }))
             });
-        }, 1000);
+        }, 2000);
+        broadcastToLobby(code, "lobby_members", {
+            code,
+            members: lobbies[code].players.map(uid => ({
+                userId: uid,
+                username: players[uid]?.username || null,
+                isHost: lobbies[code].host === uid,
+                isReady: players[uid]?.ready || false,
+                class: players[uid]?.class || "pistol"
+            }))
+        });
         return true;
     }
     return false;
@@ -211,8 +193,7 @@ function showLobbies() {
             code: lobby.code,
             host: lobby.host,
             name: lobby.name,
-            playerCount: lobby.players.length,
-            maxPlayers: lobby.maxPlayers
+            playerCount: lobby.players.length
         };
     });
     broadcast("lobby_list", { lobbies: lobbyList });
@@ -251,27 +232,9 @@ wss.on('connection', function connection(ws) {
                 const playerClass = ["archer", "pistol", "shotgun"].includes(data.class) ? data.class : "pistol";
                 if (typeof data.username === 'string' && data.username.trim()) {
                     player.username = data.username.trim();
-                    console.log(`Set username for host ${userId}: ${player.username}`);
                 }
                 const code = createLobby(userId, maxPlayers, name, playerClass);
-                
-                // Send immediate response
                 ws.send(JSON.stringify({ type: 'lobby_created', code, maxPlayers, name, class: playerClass }));
-                
-                // Broadcast lobby members immediately after creation
-                setTimeout(() => {
-                    broadcastToLobby(code, "lobby_members", {
-                        code,
-                        members: lobbies[code].players.map(uid => ({
-                            userId: uid,
-                            username: players[uid]?.username || null,
-                            isHost: lobbies[code].host === uid,
-                            isReady: players[uid]?.ready || false,
-                            class: players[uid]?.class || "pistol"
-                        }))
-                    });
-                }, 500);
-                
                 showLobbies();
                 break;
             }
@@ -279,7 +242,6 @@ wss.on('connection', function connection(ws) {
                 console.log('Received join_lobby request:', data); // ADDED LOG
                 if (typeof data.username === 'string' && data.username.trim()) {
                     player.username = data.username.trim();
-                    console.log(`Set username for joining player ${userId}: ${player.username}`);
                 }
                 const code = data.code.toUpperCase();
                 const playerClass = ["archer", "pistol", "shotgun"].includes(data.class) ? data.class : "pistol";
@@ -297,8 +259,6 @@ wss.on('connection', function connection(ws) {
                     player.role = 'player'; // Set role to player when joining a lobby
                     player.class = playerClass;
                     console.log('Sending lobby_joined for code:', code, 'to user:', userId); // ADDED LOG
-                    
-                    // Send immediate response
                     ws.send(JSON.stringify({
                         type: 'lobby_joined',
                         code,
@@ -307,10 +267,10 @@ wss.on('connection', function connection(ws) {
                         class: playerClass
                     }));
 
-                    // Update lobby list after a delay to ensure join is processed
+                    // Delay showLobbies to ensure lobby_joined is processed first
                     setTimeout(() => {
                         showLobbies();
-                    }, 1000);
+                    }, 300); // 100ms delay
                 } else {
                     console.log('Could not join lobby for code:', code, 'user:', userId); // ADDED LOG
                     ws.send(JSON.stringify({ type: 'lobby_error', message: 'Could not join lobby' }));
@@ -348,26 +308,34 @@ wss.on('connection', function connection(ws) {
                 break;
 
             case 'get_lobby_members': {
-                const code = data.code || player.lobbyCode;
-                console.log(`Getting lobby members for code: ${code}, requested by: ${userId}`);
-                
+                const { code } = data;
                 if (lobbies[code]) {
-                    const memberList = lobbies[code].players.map(uid => {
-                        const memberPlayer = players[uid];
-                        return {
-                            userId: uid,
-                            username: memberPlayer?.username || null,
-                            isHost: lobbies[code].host === uid,
-                            isReady: memberPlayer?.ready || false,
-                            class: memberPlayer?.class || "pistol"
-                        };
-                    });
-                    
+                    const memberList = lobbies[code].players.map(uid => ({
+                        userId: uid,
+                        username: players[uid]?.username || null,
+                        isHost: lobbies[code].host === uid,
+                        isReady: players[uid]?.ready || false
+                    }));
                     // Only send to the requesting client
                     ws.send(JSON.stringify({ type: 'lobby_members', code, members: memberList }));
-                    console.log('Sent lobby members for code:', code, 'members:', memberList);
+                    console.log(JSON.stringify({ type: 'lobby_members', code, members: memberList }))
                 } else {
-                    console.log('Lobby not found for get_lobby_members:', code);
+                    ws.send(JSON.stringify({ type: 'lobby_error', message: 'Lobby not found' }));
+                }
+                break;
+            }
+
+            case 'get_lobby_members': {
+                const code = data.code || player.lobbyCode;
+                if (lobbies[code]) {
+                    const memberList = lobbies[code].players.map(uid => ({
+                        userId: uid,
+                        username: players[uid]?.username || null,
+                        isHost: lobbies[code].host === uid,
+                        isReady: players[uid]?.ready || false
+                    }));
+                    ws.send(JSON.stringify({ type: 'lobby_members', code, members: memberList }));
+                } else {
                     ws.send(JSON.stringify({ type: 'lobby_error', message: 'Lobby not found' }));
                 }
                 break;
@@ -375,82 +343,46 @@ wss.on('connection', function connection(ws) {
 
             case 'set_ready': {
                 // Handle ready/unready toggle from frontend
-                const code = data.code || player.lobbyCode;
-                if (!code || !lobbies[code]) {
-                    console.log('Cannot set ready: lobby not found', code);
-                    ws.send(JSON.stringify({ type: 'lobby_error', message: 'Lobby not found' }));
-                    break;
-                }
-
                 if (typeof data.ready === 'boolean') {
                     player.ready = data.ready;
-                    console.log(`${player.username || userId} set ready: ${data.ready} in lobby ${code}`);
+                    console.log(`${player.username || userId} set ready: ${data.ready}`);
 
                     // Broadcast updated lobby members to all clients in the same lobby
-                    const memberList = lobbies[code].players.map(uid => ({
-                        userId: uid,
-                        username: players[uid]?.username || null,
-                        isHost: lobbies[code].host === uid,
-                        isReady: players[uid]?.ready || false,
-                        class: players[uid]?.class || "pistol"
-                    }));
-                    broadcastToLobby(code, "lobby_members", { code, members: memberList });
+                    const code = data.code || player.lobbyCode;
+                    if (code && lobbies[code]) {
+                        const memberList = lobbies[code].players.map(uid => ({
+                            userId: uid,
+                            username: players[uid]?.username || null,
+                            isHost: lobbies[code].host === uid,
+                            isReady: players[uid]?.ready || false
+                        }));
+                        broadcastToLobby(code, "lobby_members", { code, members: memberList });
 
-                    // Check if all players are ready and we have at least 2 players
-                    const allReady = lobbies[code].players.every(uid => players[uid]?.ready);
-                    const enoughPlayers = lobbies[code].players.length >= 2;
+                        // Check if all players are ready and we have at least 2 players
+                        const allReady = lobbies[code].players.every(uid => players[uid]?.ready);
+                        const enoughPlayers = lobbies[code].players.length >= 2;
 
-                    if (allReady && enoughPlayers && !gameStarted) {
-                        // Remove null/unnamed users before starting the game
-                        removeNullUsersFromLobby(code);
-                        // Start countdown for game start
-                        console.log(`All players ready in lobby ${code}, starting countdown`);
-                        broadcastToLobby(code, "game_start_countdown", { countdown: 3 });
+                        if (allReady && enoughPlayers && !gameStarted) {
+                            // Remove null/unnamed users before starting the game
+                            removeNullUsersFromLobby(code);
+                            // Start countdown for game start
+                            console.log(`All players ready in lobby ${code}, starting countdown`);
+                            broadcastToLobby(code, "game_start_countdown", { countdown: 3 });
 
-                        // After 3 seconds, start the game
-                        setTimeout(() => {
-                            if (lobbies[code]) {
-                                tryStartGame();
-                                gameStarted = true;
-                                console.log(`Game started in lobby ${code}`);
-                            }
-                        }, 3000);
+                            // After 3 seconds, start the game
+                            setTimeout(() => {
+                                if (lobbies[code]) {
+                                    tryStartGame();
+                                    gameStarted = true;
+                                    console.log(`Game started in lobby ${code}`);
+                                }
+                            }, 3000);
+
+                        }
                     }
-                } else {
-                    console.log('Invalid ready value received:', data.ready);
                 }
                 break;
             }
-            
-            case 'set_name': {
-                // Handle name change from frontend
-                const code = data.code || player.lobbyCode;
-                if (!code || !lobbies[code]) {
-                    console.log('Cannot set name: lobby not found', code);
-                    ws.send(JSON.stringify({ type: 'lobby_error', message: 'Lobby not found' }));
-                    break;
-                }
-
-                if (typeof data.username === 'string' && data.username.trim()) {
-                    const newUsername = data.username.trim();
-                    player.username = newUsername;
-                    console.log(`${userId} changed name to: ${newUsername} in lobby ${code}`);
-
-                    // Broadcast updated lobby members to all clients in the same lobby
-                    const memberList = lobbies[code].players.map(uid => ({
-                        userId: uid,
-                        username: players[uid]?.username || null,
-                        isHost: lobbies[code].host === uid,
-                        isReady: players[uid]?.ready || false,
-                        class: players[uid]?.class || "pistol"
-                    }));
-                    broadcastToLobby(code, "lobby_members", { code, members: memberList });
-                } else {
-                    console.log('Invalid username received:', data.username);
-                }
-                break;
-            }
-            
             case 'hit':
 
                 // Increase score by 50 if weapon is gun
@@ -569,37 +501,6 @@ wss.on('connection', function connection(ws) {
 
     ws.on('close', () => {
         console.log(`Client ${userId} disconnected`);
-        // Clean up player from lobbies when they disconnect
-        if (player.lobbyCode && lobbies[player.lobbyCode]) {
-            const lobby = lobbies[player.lobbyCode];
-            lobby.players = lobby.players.filter(pid => pid !== userId);
-            
-            // If lobby is empty, delete it
-            if (lobby.players.length === 0) {
-                delete lobbies[player.lobbyCode];
-                delete lobbyFaceData[player.lobbyCode];
-                console.log(`Deleted empty lobby ${player.lobbyCode}`);
-            } else {
-                // If the host left, assign new host
-                if (lobby.host === userId && lobby.players.length > 0) {
-                    lobby.host = lobby.players[0];
-                    players[lobby.players[0]].isHost = true;
-                    console.log(`Assigned new host ${lobby.players[0]} to lobby ${player.lobbyCode}`);
-                }
-                
-                // Broadcast updated member list
-                broadcastToLobby(player.lobbyCode, "lobby_members", {
-                    code: player.lobbyCode,
-                    members: lobby.players.map(uid => ({
-                        userId: uid,
-                        username: players[uid]?.username || null,
-                        isHost: lobby.host === uid,
-                        isReady: players[uid]?.ready || false,
-                        class: players[uid]?.class || "pistol"
-                    }))
-                });
-            }
-        }
         delete players[userId];
         updateLobbyStatus();
     });
