@@ -43,23 +43,43 @@ const CreateLobbyPage = () => {
     if (!lastMessage) return;
     try {
       const msg = JSON.parse(lastMessage);
+      console.log("CreateLobbyPage received message:", msg);
+      
       if (msg.type === 'lobby_created') {
         setIsLoading(false);
-        navigate(`/lobby/${msg.code}/waitlist`);
+        console.log("Lobby created successfully, navigating to:", `/lobby/${msg.code}/waitlist`);
+        
+        // Store username in localStorage for the waitlist page
+        localStorage.setItem('currentUsername', username.trim());
+        
+        // Small delay to ensure backend state is ready
+        setTimeout(() => {
+          navigate(`/lobby/${msg.code}/waitlist`);
+        }, 500);
       } else if (msg.type === 'lobby_list' && Array.isArray(msg.lobbies) && msg.lobbies.length > 0 && isLoading) {
         // Use the last lobby in the list (most recently created) - This logic might need refinement
         // A better approach would be to ensure 'lobby_created' message is always received with the correct code
         const lastLobby = msg.lobbies[msg.lobbies.length - 1];
         if (lastLobby && lastLobby.code) {
           setIsLoading(false);
-          navigate(`/lobby/${lastLobby.code}/waitlist`);
+          console.log("Using lobby from list, navigating to:", `/lobby/${lastLobby.code}/waitlist`);
+          
+          // Store username in localStorage for the waitlist page
+          localStorage.setItem('currentUsername', username.trim());
+          
+          setTimeout(() => {
+            navigate(`/lobby/${lastLobby.code}/waitlist`);
+          }, 500);
         }
       } else if (msg.type === 'lobby_error') {
         setIsLoading(false);
+        console.error("Lobby creation error:", msg.message);
         alert(msg.message || 'Failed to create lobby.');
       }
-    } catch (e) {}
-  }, [lastMessage, navigate, isLoading]);
+    } catch (e) {
+      console.error("Error parsing message in CreateLobbyPage:", e);
+    }
+  }, [lastMessage, navigate, isLoading, username]);
 
   const handleCreateLobby = () => {
     // Validate that both name and code are filled out
@@ -72,6 +92,12 @@ const CreateLobbyPage = () => {
       return;
     }
 
+    // Check WebSocket connection status
+    if (wsStatus !== 'open') {
+      alert('Connection not ready. Please wait for connection to establish.');
+      return;
+    }
+
     // Make sure we have a userId
     const userId = localStorage.getItem('userId');
     if (!userId) {
@@ -81,16 +107,33 @@ const CreateLobbyPage = () => {
 
     setIsLoading(true);
     console.log('Creating lobby with userId:', userId, 'username:', username.trim());
-    sendMessage({
+    
+    // Store username immediately in localStorage
+    localStorage.setItem('currentUsername', username.trim());
+    
+    const createLobbyMessage = {
       type: 'create_lobby',
       name: lobbyName.trim(), // Trim lobby name
       maxPlayers: maxPlayers,
       username: username.trim(), // Send username
       role: 'player',
       class: selectedClass.toLowerCase()
-    });
+    };
+    
+    console.log("Sending create lobby message:", createLobbyMessage);
+    sendMessage(createLobbyMessage);
     
     localStorage.setItem('playerClass', selectedClass.toLowerCase());
+    
+    // Add timeout fallback in case we don't get a response
+    setTimeout(() => {
+      if (isLoading) {
+        console.warn("Create lobby timeout, attempting to navigate anyway");
+        setIsLoading(false);
+        // Try to find the most recent lobby as fallback
+        sendMessage({ type: 'show_lobbies' });
+      }
+    }, 5000);
   };
 
   return (
@@ -201,9 +244,9 @@ const CreateLobbyPage = () => {
               {/* Create Button */}
               <Button
                 onClick={handleCreateLobby}
-                disabled={isLoading || !lobbyName.trim() || !username.trim()}
+                disabled={isLoading || !lobbyName.trim() || !username.trim() || wsStatus !== 'open'}
                 className={`flex items-center justify-center gap-2 ${
-                  isLoading
+                  isLoading || wsStatus !== 'open'
                     ? "bg-gradient-to-r from-[#7b7583] to-[#838383] cursor-not-allowed"
                     : "bg-gradient-to-r from-[#741ff5] to-[#9351f7] hover:from-[#9351f7] hover:to-[#e971ff]"
                 }`}
