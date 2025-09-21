@@ -20,19 +20,37 @@ export function WebSocketProvider({ children }) {
     // --- END LOCAL TESTING ---
     if (!wsUrl) {
       if (process.env.NODE_ENV === 'production') {
-        wsUrl = 'wss://csis3784-project-backend-1.onrender.com';
+        wsUrl = 'wss://csis3784-project-backend-1.onrender.com/';
       } else {
         const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
         wsUrl = `${wsProtocol}localhost:8080`;
       }
     }
+
+    console.log('🔌 Attempting WebSocket connection to:', wsUrl);
+    console.log('🌍 Environment:', process.env.NODE_ENV);
+    console.log('🏠 Current URL:', window.location.href);
+
     ws.current = new window.WebSocket(wsUrl);
 
-    ws.current.onopen = () => setWsStatus('open');
-    ws.current.onclose = () => setWsStatus('closed');
-    ws.current.onerror = () => setWsStatus('error');
+    ws.current.onopen = () => {
+      console.log('✅ WebSocket connected successfully');
+      setWsStatus('open');
+    };
+
+    ws.current.onclose = (event) => {
+      console.log('❌ WebSocket closed:', event.code, event.reason);
+      setWsStatus('closed');
+    };
+
+    ws.current.onerror = (error) => {
+      console.error('🚨 WebSocket error:', error);
+      console.log('🔍 Backend URL being used:', wsUrl);
+      setWsStatus('error');
+    };
+
     ws.current.onmessage = (event) => {
-      console.log('WS received:', event.data); // ADDED LOG
+      console.log('📨 WS received:', event.data);
       setLastMessage(event.data);
       // Store userId from welcome message
       try {
