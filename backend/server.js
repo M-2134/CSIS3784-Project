@@ -1,9 +1,55 @@
 const WebSocket = require('ws');
 const http = require('http');
+const express = require('express');
+const path = require('path');
 
-const server = http.createServer();
+const app = express();
+const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 const port = process.env.PORT || 8080;
+
+// CORS middleware for frontend domain
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', 'https://csis-3784-project-1gsf.vercel.app');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.header('Access-Control-Allow-Credentials', 'true');
+
+    if (req.method === 'OPTIONS') {
+        res.sendStatus(200);
+    } else {
+        next();
+    }
+});
+
+// Serve static files from frontend dist
+app.use(express.static(path.join(__dirname, 'dist')));
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+    res.json({
+        status: 'OK',
+        message: 'Backend server is running',
+        timestamp: new Date().toISOString(),
+        connections: wss.clients.size
+    });
+});
+
+// API endpoint to get server status
+app.get('/api/status', (req, res) => {
+    res.json({
+        server: 'CSIS3784 Project Backend',
+        uptime: process.uptime(),
+        connections: wss.clients.size,
+        lobbies: Object.keys(lobbies).length,
+        players: Object.keys(players).length
+    });
+});
+
+// Serve frontend for all other routes
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'dist/index.html'));
+});
 
 // Player storage
 let players = {}; // key: userId, value: { ws, username, role, ready, score }
