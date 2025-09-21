@@ -20,7 +20,7 @@ export function WebSocketProvider({ children }) {
     // --- END LOCAL TESTING ---
     if (!wsUrl) {
       if (process.env.NODE_ENV === 'production') {
-        wsUrl = 'wss://hyperblast.onrender.com';
+        wsUrl = 'wss://csis3784-project-backend-1.onrender.com';
       } else {
         const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
         wsUrl = `${wsProtocol}localhost:8080`;
