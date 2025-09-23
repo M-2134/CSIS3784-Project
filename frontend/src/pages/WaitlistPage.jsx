@@ -41,6 +41,15 @@ const WaitlistPage = () => {
     const user = players.find(p => p.id === currentUserId);
     if (!user) {
       addDebugLog("Current user not found in players list");
+      // If exact match not found, try to find by username as fallback
+      const storedUsername = localStorage.getItem('currentUsername');
+      if (storedUsername) {
+        const userByName = players.find(p => p.name === storedUsername);
+        if (userByName) {
+          addDebugLog(`Found current user by username match: ${storedUsername}`);
+          return userByName;
+        }
+      }
     } else {
       addDebugLog(`Found current user: ${user.name}`);
     }
@@ -176,23 +185,35 @@ const WaitlistPage = () => {
       if (msg.type === 'lobby_members' && msg.code === lobbyId) {
         addDebugLog(`Received lobby_members: ${JSON.stringify(msg.members)}`);
 
-        // Get stored username for consistency - but only for fallback, prefer server data
+        // Get stored username and userId for consistency
         const storedUsername = localStorage.getItem('currentUsername');
         const storedUserId = localStorage.getItem('userId');
 
         // Map the members to players with proper structure
         const updatedPlayers = msg.members.map(p => {
-          // FIXED: Always prefer server username first, only fallback to stored username if server has null/empty
           let displayName;
           
+          // Prioritize server username, but use stored username for current user if server doesn't have it
           if (p.username && p.username.trim()) {
-            // Server has a valid username, use it
             displayName = p.username.trim();
             addDebugLog(`Using server username for ${p.userId}: ${displayName}`);
+            
+            // Update localStorage if this is the current user
+            if (p.userId === storedUserId) {
+              localStorage.setItem('currentUsername', displayName);
+            }
           } else if (p.userId === storedUserId && storedUsername) {
-            // Server username is null/empty but this is current user with stored username
+            // This is the current user and we have a stored username
             displayName = storedUsername;
             addDebugLog(`Using stored username for current user ${p.userId}: ${displayName}`);
+            
+            // Send username update to server
+            sendMessage({
+              type: 'set_name',
+              code: lobbyId,
+              userId: storedUserId,
+              username: storedUsername
+            });
           } else {
             // Fallback to generic name
             displayName = `Player ${p.userId?.substring(0, 4) || 'Unknown'}`;
@@ -227,13 +248,22 @@ const WaitlistPage = () => {
         const storedUserId = localStorage.getItem('userId');
         
         const updatedPlayers = msg.players.map(p => {
-          // FIXED: Same logic as above - prefer server username
           let displayName;
           
           if (p.username && p.username.trim()) {
             displayName = p.username.trim();
+            if ((p.userId || p.id) === storedUserId) {
+              localStorage.setItem('currentUsername', displayName);
+            }
           } else if ((p.userId || p.id) === storedUserId && storedUsername) {
             displayName = storedUsername;
+            // Send username update to server
+            sendMessage({
+              type: 'set_name',
+              code: lobbyId,
+              userId: storedUserId,
+              username: storedUsername
+            });
           } else {
             displayName = `Player ${(p.userId || p.id)?.substring(0, 4) || 'Unknown'}`;
           }
@@ -270,7 +300,7 @@ const WaitlistPage = () => {
     } catch (e) {
       addDebugLog(`Failed to parse WebSocket message: ${e.message}`);
     }
-  }, [lastMessage, lobbyId, navigate, currentUserId]);
+  }, [lastMessage, lobbyId, navigate, currentUserId, sendMessage]);
 
   useEffect(() => {
     let timerId;
@@ -286,34 +316,38 @@ const WaitlistPage = () => {
 
   // --- EVENT HANDLERS (to be passed down as props) ---
   const handleReadyToggle = () => {
-    if (!currentUserId || !lobbyId) {
-      addDebugLog("Cannot toggle ready: missing currentUserId or lobbyId");
+    const userId = currentUserId || localStorage.getItem('userId');
+    
+    if (!userId || !lobbyId) {
+      addDebugLog("Cannot toggle ready: missing userId or lobbyId");
       return;
     }
 
-    addDebugLog(`Toggling ready state for user: ${currentUserId} in lobby: ${lobbyId}`);
+    addDebugLog(`Toggling ready state for user: ${userId} in lobby: ${lobbyId}`);
 
     // Send a message to the WebSocket to update readiness on the server
     sendMessage({
       type: 'set_ready',
       code: lobbyId,
-      userId: currentUserId,
+      userId: userId,
       ready: currentUser ? !currentUser.isReady : true
     });
 
     // Update local state for immediate feedback
     setPlayers(players.map(p => 
-      p.id === currentUserId ? { ...p, isReady: !p.isReady } : p
+      p.id === userId ? { ...p, isReady: !p.isReady } : p
     ));
   };
 
   const handleNameChange = (newName) => {
-    if (!currentUserId || !lobbyId) {
-      addDebugLog("Cannot change name: missing currentUserId or lobbyId");
+    const userId = currentUserId || localStorage.getItem('userId');
+    
+    if (!userId || !lobbyId) {
+      addDebugLog("Cannot change name: missing userId or lobbyId");
       return;
     }
 
-    addDebugLog(`Changing name for user: ${currentUserId} to: ${newName}`);
+    addDebugLog(`Changing name for user: ${userId} to: ${newName}`);
 
     // Store the new username in localStorage for consistency
     localStorage.setItem('currentUsername', newName);
@@ -322,13 +356,13 @@ const WaitlistPage = () => {
     sendMessage({
       type: 'set_name',
       code: lobbyId,
-      userId: currentUserId,
+      userId: userId,
       username: newName
     });
 
     // Update local state for immediate feedback
     setPlayers(players.map(p => 
-      p.id === currentUserId ? { ...p, name: newName } : p
+      p.id === userId ? { ...p, name: newName } : p
     ));
   };
 
@@ -390,6 +424,15 @@ const WaitlistPage = () => {
     );
   }
 
+  // Create effective current user for display
+  const effectiveCurrentUser = currentUser || {
+    id: currentUserId || localStorage.getItem('userId'),
+    name: localStorage.getItem('currentUsername') || "You",
+    isHost: players.length === 0 || players.some(p => p.isHost && p.id === (currentUserId || localStorage.getItem('userId'))),
+    isReady: false,
+    class: localStorage.getItem('playerClass') || 'pistol'
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0f051d] via-[#1f152b] to-[#0f051d] relative overflow-hidden">
       <BackgroundDecorations />
@@ -430,14 +473,7 @@ const WaitlistPage = () => {
           {/* Always show PlayerWaitlistPage - simplified logic */}
           <PlayerWaitlistPage
             players={players}
-            currentUser={
-              currentUser || {
-                id: currentUserId,
-                name: localStorage.getItem('currentUsername') || "You",
-                isHost: false,
-                isReady: false,
-              }
-            }
+            currentUser={effectiveCurrentUser}
             lobbyCode={lobbyId}
             isStarting={isStarting}
             countdown={countdown}
