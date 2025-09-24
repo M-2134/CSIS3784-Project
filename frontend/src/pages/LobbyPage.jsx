@@ -1,3 +1,6 @@
+//Marco Pretorius (2024442606)
+//JJ Kleynhans (2024158442)
+
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react'
@@ -9,10 +12,15 @@ import { ArrowLeft, Plus, Users, Home, Gamepad2, Target } from 'lucide-react'
  * The main lobby for players.
  * Provides options to create a new game lobby or join an existing one.
  */
+// Main component for the player lobby page
 const LobbyPage = () => {
-const navigate = useNavigate()
+  // React Router navigation function
+  const navigate = useNavigate()
 
+
+  // WebSocket connection and sendMessage function
   const { ws, sendMessage } = useWebSocket()
+  // State for lobby statistics
   const [lobbyStats, setLobbyStats] = useState({
     totalLobbies: 0,
     totalPlayers: 0,
@@ -20,6 +28,7 @@ const navigate = useNavigate()
   })
 
   // Listen for lobby data from WebSocket
+  // Listen for lobby data from WebSocket and update stats
   useEffect(() => {
     if (!ws) return
 
@@ -47,15 +56,19 @@ const navigate = useNavigate()
     // Request lobby data on mount
     sendMessage({ type: "show_lobbies" })
 
+    // Clean up event listener on unmount
     return () => ws.removeEventListener("message", handleMessage)
   }, [ws, sendMessage])
 
+  // Render the lobby page UI
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0f051d] via-[#1f152b] to-[#0f051d] relative overflow-hidden">
-      <BackgroundDecorations />
+  {/* Animated background decorations */}
+  <BackgroundDecorations />
 
       {/* HBlast Header */}
-      <header className="flex justify-between items-center py-4 md:py-6 relative z-10 px-4 md:px-6 lg:px-8">
+  {/* HBlast Header - shows app name and navigation */}
+  <header className="flex justify-between items-center py-4 md:py-6 relative z-10 px-4 md:px-6 lg:px-8">
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigate("/")}
@@ -73,8 +86,9 @@ const navigate = useNavigate()
         </div>
       </header>
 
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] px-4 md:px-6 lg:px-8 relative z-10">
-        {/* Hero Section */}
+  {/* Main content container for lobby actions and stats */}
+  <div className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] px-4 md:px-6 lg:px-8 relative z-10">
+  {/* Hero Section - title and description */}
         <div className="text-center mb-8 md:mb-12">
           <h1 className="text-white text-3xl md:text-4xl lg:text-5xl font-bold mb-4">
             <span className="block">Ready to</span>
@@ -85,9 +99,9 @@ const navigate = useNavigate()
           </p>
         </div>
 
-        {/* Action Cards */}
+  {/* Action Cards - create or join lobby */}
         <div className="w-full max-w-md space-y-4 md:space-y-6 mb-8">
-          {/* Create Lobby Card */}
+          {/* Create Lobby Card - start a new match */}
           <div className="bg-gradient-to-br from-[#1f152b] to-[#0f051d] rounded-2xl p-6 md:p-8 border-2 border-[#9351f7]/40 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-[1.02] hover:border-[#e971ff]/60 hover:shadow-[#9351f7]/20">
             <div className="flex items-center gap-4 mb-4">
               <div className="bg-gradient-to-r from-[#741ff5] to-[#9351f7] p-3 rounded-full">
@@ -106,7 +120,7 @@ const navigate = useNavigate()
             </button>
           </div>
 
-          {/* Join Lobby Card */}
+          {/* Join Lobby Card - enter an existing match */}
           <div className="bg-gradient-to-br from-[#1f152b] to-[#0f051d] rounded-2xl p-6 md:p-8 border-2 border-[#9351f7]/40 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-[1.02] hover:border-[#e971ff]/60 hover:shadow-[#9351f7]/20">
             <div className="flex items-center gap-4 mb-4">
               <div className="bg-gradient-to-r from-[#9351f7] to-[#e971ff] p-3 rounded-full">
@@ -126,7 +140,7 @@ const navigate = useNavigate()
           </div>
         </div>
 
-        {/* Real-time Stats */}
+  {/* Real-time Stats - show active games, players, lobbies */}
         <div className="grid grid-cols-3 gap-4 w-full max-w-md mb-8">
           <div className="bg-gradient-to-br from-[#1f152b] to-[#0f051d] rounded-xl p-4 border border-[#2a3441]/30 text-center">
             <Gamepad2 size={20} className="text-[#e971ff] mx-auto mb-2" />
@@ -145,7 +159,7 @@ const navigate = useNavigate()
           </div>
         </div>
 
-        {/* Back to Home Button */}
+  {/* Back to Home Button - return to landing page */}
         <div className="w-full max-w-xs">
           <button
             onClick={() => navigate("/")}

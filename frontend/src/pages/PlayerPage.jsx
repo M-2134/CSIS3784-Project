@@ -1,3 +1,6 @@
+//Marco Pretorius (2024442606)
+//JJ Kleynhans (2024158442)
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import HealthBar from '../components/HealthBar';
@@ -5,40 +8,47 @@ import Button from '../components/Button';
 import { Zap, Crosshair, Timer, Menu, LogOut, Skull } from 'lucide-react';
 import { useWebSocket } from '../WebSocketContext';
 
+// Main component for the player game page
 const PlayerPage = () => {
+
+  // Get gameId from URL params
   const { gameId } = useParams();
-  const navigate = useNavigate();
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const resizeObserverRef = useRef(null);
+  const navigate = useNavigate(); // React Router navigation
+  const videoRef = useRef(null); // Ref for video element
+  const canvasRef = useRef(null); // Ref for canvas overlay
+  const resizeObserverRef = useRef(null); // Ref for resize observer
+
 
   // Detection model refs and state
-  const modelRef = useRef(null);
-  const detectionIntervalRef = useRef(null);
-  const nextPersonIdRef = useRef(1);
-  const trackedPeopleRef = useRef([]);
-  const [isModelLoaded, setIsModelLoaded] = useState(false);
-  const [detectedPeople, setDetectedPeople] = useState([]);
+  const modelRef = useRef(null); // TensorFlow model
+  const detectionIntervalRef = useRef(null); // Interval for detection
+  const nextPersonIdRef = useRef(1); // Next person ID for tracking
+  const trackedPeopleRef = useRef([]); // Tracked people across frames
+  const [isModelLoaded, setIsModelLoaded] = useState(false); // Is model loaded
+  const [detectedPeople, setDetectedPeople] = useState([]); // List of detected people
 
-  // Add MediaPipe Selfie Segmentation integration
-  const selfieSegmentationRef = useRef(null);
-  const [isSegmentationLoaded, setIsSegmentationLoaded] = useState(false);
-  const [segmentationMask, setSegmentationMask] = useState(null);
+
+  // MediaPipe Selfie Segmentation integration
+  const selfieSegmentationRef = useRef(null); // Ref for segmentation model
+  const [isSegmentationLoaded, setIsSegmentationLoaded] = useState(false); // Is segmentation loaded
+  const [segmentationMask, setSegmentationMask] = useState(null); // Segmentation mask image
+
 
   // --- Game State ---
-  const [health, setHealth] = useState(100);
-  const [score, setScore] = useState(0);
-  const [gameTime, setGameTime] = useState(100);
-  const [showHitIndicator, setShowHitIndicator] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [gameStarting, setGameStarting] = useState(false);
-  const [startCountdown, setStartCountdown] = useState(3);
+  const [health, setHealth] = useState(100); // Player health
+  const [score, setScore] = useState(0); // Player score
+  const [gameTime, setGameTime] = useState(100); // Game timer
+  const [showHitIndicator, setShowHitIndicator] = useState(false); // Show hit/miss indicator
+  const [isMenuOpen, setIsMenuOpen] = useState(false); // Is game menu open
+  const [gameStarting, setGameStarting] = useState(false); // Is game starting
+  const [startCountdown, setStartCountdown] = useState(3); // Countdown before game starts
+
 
   // --- Sound Effects ---
-  const hitSoundRef = useRef(null);
-  const missSoundRef = useRef(null);
+  const hitSoundRef = useRef(null); // Ref for hit sound
+  const missSoundRef = useRef(null); // Ref for miss sound
 
-  // Initialize sounds
+  // Initialize sounds on mount
   useEffect(() => {
     hitSoundRef.current = new Audio('/sounds/laser-hit.mp3');
     missSoundRef.current = new Audio('/sounds/laser-miss.mp3');
@@ -58,7 +68,7 @@ const PlayerPage = () => {
     };
   }, []);
 
-  // Play sound helper
+  // Helper to play a sound effect
   const playSound = (soundRef) => {
     if (!soundRef.current) return;
     try {
@@ -70,6 +80,7 @@ const PlayerPage = () => {
   };
 
   // --- Game Start Countdown ---
+  // Handles countdown before game starts
   useEffect(() => {
     if (gameStarting) {
       if (startCountdown > 0) {
@@ -82,6 +93,7 @@ const PlayerPage = () => {
   }, [gameStarting, startCountdown]);
 
   // --- Game Timer & WebSocket Logic ---
+  // Handles game timer and pauses when menu is open
   useEffect(() => {
     let timerInterval;
     if (!isMenuOpen) {
@@ -99,6 +111,7 @@ const PlayerPage = () => {
   }, [gameId, navigate, isMenuOpen]);
 
   // --- Use WebSocket from context ---
+  // Get WebSocket and status from context
   const { ws, wsStatus } = useWebSocket();
 
   // Player identity state from server
@@ -146,7 +159,7 @@ const PlayerPage = () => {
     }
   }, [gameId]);
 
-  // Handle WebSocket messages
+  // Handle WebSocket messages for game events and player identities
   useEffect(() => {
     console.log(`🎮 CLIENT: PlayerPage useEffect called. WebSocket status: ${wsStatus}, ws exists: ${!!ws}`);
 
@@ -278,7 +291,7 @@ const PlayerPage = () => {
     };
   }, [ws, navigate, gameId]);
 
-  // Load TensorFlow.js and COCO-SSD model
+  // Load TensorFlow.js and COCO-SSD model for person detection
   useEffect(() => {
     async function loadModel() {
       try {
@@ -806,7 +819,7 @@ const PlayerPage = () => {
     };
   }, [isModelLoaded, detectPeople]);
 
-  // Load MediaPipe Selfie Segmentation
+  // Load MediaPipe Selfie Segmentation for background segmentation
   useEffect(() => {
     const loadSegmentation = async () => {
       if (!window.SelfieSegmentation) {
@@ -1011,6 +1024,7 @@ const PlayerPage = () => {
   }, [detectedPeople, segmentationMask]);
 
   // --- Reload State ---
+  // Handles reload animation for shooting
   const [isReloading, setIsReloading] = useState(false);
   const [reloadOffset, setReloadOffset] = useState(251.2);
   const [circleTransition, setCircleTransition] = useState('none');
@@ -1037,6 +1051,7 @@ const PlayerPage = () => {
   }, [isReloading, CIRCLE_CIRCUMFERENCE]);
 
   // --- Event Handlers ---
+  // Handles shooting, hit detection, suicide, and quitting
   // Using personId for now
   // Will add in functionality for it later
   const handlePlayerHit = (personId) => {
@@ -1170,6 +1185,7 @@ const PlayerPage = () => {
   };
 
   // --- Other Effects ---
+  // Handles showing hit/miss indicators and new player notifications
   useEffect(() => {
     if (showHitIndicator) {
       const t = setTimeout(() => setShowHitIndicator(false), 500);
@@ -1220,6 +1236,7 @@ const PlayerPage = () => {
     };
   }, []);
 
+  // Render the player game page UI
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-black">
       <video ref={videoRef} className={`h-full w-full object-cover ${isMenuOpen ? 'blur-sm' : ''}`} autoPlay playsInline muted />

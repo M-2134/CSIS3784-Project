@@ -1,54 +1,60 @@
+//Marco Pretorius (2024442606)
+//JJ Kleynhans (2024158442)
+
 import React, { useEffect, useRef } from 'react'; // NEW: Added useRef for more robust sound handling.
 import { Crown, Play, ShieldX, Clipboard, CheckCircle2, XCircle } from 'lucide-react';
 import Button from '../components/Button';
 
 /**
  * The waitlist view specifically for the host of the lobby.
+ * Shows lobby code, player list, ready status, and handles game start countdown.
  */
+// Main component for host's waitlist page in the lobby
 const HostWaitlistPage = ({ lobbyId, players, allPlayersReady, isStarting, countdown, onStart, onCancel }) => {
   
-  // NEW: A ref is used to hold the Audio object. This prevents it from being re-created on every render.
+
+  // Ref to hold the countdown sound Audio object
   const countdownSoundRef = useRef(null);
-  // NEW: A ref is used as a flag to ensure the sound only plays once per countdown sequence.
+  // Ref to track if countdown sound has played for current sequence
   const countdownPlayed = useRef(false);
 
   // NEW: This effect runs only once when the component mounts to create the audio object.
+
+  // Create the countdown sound Audio object on mount, clean up on unmount
   useEffect(() => {
-    // NEW: The audio path is corrected to '/sounds/Countdown.mp3' for consistency with other components.
     countdownSoundRef.current = new Audio('/sounds/Countdown.mp3');
-    
-    // NEW: A cleanup function is returned to properly dispose of the audio object when the component is unmounted.
     return () => {
       if (countdownSoundRef.current) {
         countdownSoundRef.current.pause();
         countdownSoundRef.current = null;
       }
     };
-  }, []); // NEW: The empty dependency array [] ensures this effect runs only once.
+  }, []);
   
   // This useEffect block handles playing the sound when the 'isStarting' prop changes.
+
+  // Play countdown sound when game is starting, only once per countdown
   useEffect(() => {
-    // NEW: Check if the countdown is starting AND if the sound has not already been played for this sequence.
     if (isStarting && !countdownPlayed.current) {
-      // NEW: Ensure the audio object has been loaded before trying to play it.
       if (countdownSoundRef.current) {
-        countdownSoundRef.current.volume = 0.7; // Set volume to a reasonable level
-        countdownSoundRef.current.currentTime = 0; // NEW: Rewind the sound to the start before playing.
+        countdownSoundRef.current.volume = 0.7;
+        countdownSoundRef.current.currentTime = 0;
         countdownSoundRef.current.play().catch(error => console.error("Error playing sound:", error));
-        // NEW: Set the flag to true to prevent the sound from playing again during this countdown.
         countdownPlayed.current = true;
       }
     } else if (!isStarting) {
-      // NEW: If the countdown is cancelled or over, reset the flag for the next game.
       countdownPlayed.current = false;
     }
   }, [isStarting]);
 
+
+  // Copy lobby code to clipboard and show alert
   const copyLobbyCode = () => {
     navigator.clipboard.writeText(lobbyId.toUpperCase());
     alert(`Lobby Code "${lobbyId.toUpperCase()}" copied to clipboard!`);
   };
 
+  // If game is starting, show countdown UI and cancel button
   if (isStarting) {
     return (
       <div className="text-center">
@@ -81,16 +87,19 @@ const HostWaitlistPage = ({ lobbyId, players, allPlayersReady, isStarting, count
     );
   }
 
+  // Render the host waitlist page UI
   return (
     <>
-      <div className="mb-6 text-center">
+  {/* Lobby code display and copy button */}
+  <div className="mb-6 text-center">
         <label className="text-sm text-gray-400">Share this code with your friends</label>
         <div className="mt-1 flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-gray-700 p-3" onClick={copyLobbyCode}>
           <span className="text-2xl font-bold tracking-widest text-indigo-400">{lobbyId.toUpperCase()}</span>
           <Clipboard size={20} className="text-gray-400" />
         </div>
       </div>
-      <div className="space-y-3 rounded-lg bg-gray-800 p-4">
+  {/* Player list with ready status */}
+  <div className="space-y-3 rounded-lg bg-gray-800 p-4">
         {players.map(player => (
           <div key={player.id} className="flex items-center justify-between rounded-md bg-white/5 p-3">
             <div className="flex items-center gap-3">
@@ -104,7 +113,8 @@ const HostWaitlistPage = ({ lobbyId, players, allPlayersReady, isStarting, count
           </div>
         ))}
       </div>
-      <div className="mt-6">
+  {/* Start game button, enabled only if all players are ready */}
+  <div className="mt-6">
         <Button onClick={onStart} disabled={!allPlayersReady} className="flex items-center justify-center gap-2">
           <Play size={20} />
           <span>{allPlayersReady ? 'Start Game' : 'Waiting for Players...'}</span>

@@ -1,3 +1,6 @@
+//Marco Pretorius (2024442606)
+//JJ Kleynhans (2024158442)
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import BackgroundDecorations from "../components/BackgroundDecorations"
@@ -9,14 +12,20 @@ import { useWebSocket } from '../WebSocketContext';
 /**
  * The post-game summary page.
  * Displays the final leaderboard and declares a winner.
+ * Shows battle stats and allows navigation to spectate or home.
  */
+// Main component for displaying end-of-game results
 const EndGamePage = () => {
-  const { gameId } = useParams();
-  const navigate = useNavigate();
-  const [winner, setWinner] = useState(null);
-  const [leaderboardData, setLeaderboardData] = useState([]);
-  const { ws } = useWebSocket();
 
+  // Get gameId from URL params
+  const { gameId } = useParams();
+  const navigate = useNavigate(); // React Router navigation
+  const [winner, setWinner] = useState(null); // Winner player object
+  const [leaderboardData, setLeaderboardData] = useState([]); // Array of player results
+  const { ws } = useWebSocket(); // WebSocket connection
+
+
+  // Listen for lobby status updates and set leaderboard/winner
   useEffect(() => {
     if (!ws) return;
     const handleMessage = (event) => {
@@ -33,12 +42,14 @@ const EndGamePage = () => {
       } catch (e) {}
     };
     ws.addEventListener('message', handleMessage);
-    // Optionally, request the latest lobby status on mount
+    // Request the latest lobby status on mount
     ws.send(JSON.stringify({ type: 'get_lobby_status', gameId }));
     return () => ws.removeEventListener('message', handleMessage);
   }, [ws, gameId]);
 
-   const getRankIcon = (index) => {
+
+  // Get icon for player rank (1st, 2nd, 3rd, others)
+  const getRankIcon = (index) => {
     switch (index) {
       case 0:
         return <Crown size={24} className="text-yellow-400" />
@@ -51,6 +62,8 @@ const EndGamePage = () => {
     }
   }
 
+
+  // Get style for player rank card
   const getRankStyle = (index) => {
     switch (index) {
       case 0:
@@ -64,10 +77,11 @@ const EndGamePage = () => {
     }
   }
 
+  // Render the end game page UI
   return (<div className="min-h-screen bg-gradient-to-br from-[#0f051d] via-[#1f152b] to-[#0f051d] relative overflow-hidden">
       <BackgroundDecorations />
 
-      {/* HBlast Header */}
+  {/* HBlast Header - shows app name and navigation */}
       <header className="flex justify-between items-center py-4 md:py-6 relative z-10 px-4 md:px-6 lg:px-8">
         <div className="flex items-center gap-4">
           <button
@@ -88,7 +102,7 @@ const EndGamePage = () => {
 
       <main className="flex-grow p-4 md:p-6 relative z-10">
         <div className="mx-auto w-full max-w-4xl space-y-6 md:space-y-8">
-          {/* Winner Announcement */}
+          {/* Winner Announcement - shows the champion player */}
           {winner && (
             <div className="text-center mb-8 md:mb-12">
               <div className="bg-gradient-to-br from-[#1f152b] to-[#0f051d] rounded-3xl p-6 md:p-8 border-2 border-yellow-400/40 shadow-2xl shadow-yellow-400/20 max-w-md mx-auto">
@@ -113,7 +127,7 @@ const EndGamePage = () => {
             </div>
           )}
 
-          {/* Enhanced Final Leaderboard */}
+          {/* Enhanced Final Leaderboard - shows all player rankings */}
           <div className="bg-gradient-to-br from-[#1f152b] to-[#0f051d] rounded-2xl p-4 md:p-6 border border-[#2a3441]/30 shadow-2xl">
             <div className="flex items-center gap-3 mb-6 md:mb-8">
               <Trophy size={24} className="text-[#e971ff]" />
@@ -130,7 +144,7 @@ const EndGamePage = () => {
                     ${getRankStyle(index)}
                   `}
                 >
-                  {/* Rank Badge */}
+                  {/* Rank Badge - shows player position */}
                   <div className="absolute -top-2 -left-2 w-8 h-8 md:w-10 md:h-10 rounded-full bg-gradient-to-r from-[#741ff5] to-[#9351f7] flex items-center justify-center shadow-lg">
                     <span className="text-white text-sm md:text-base font-bold">{index + 1}</span>
                   </div>
@@ -155,7 +169,7 @@ const EndGamePage = () => {
                     </div>
                   </div>
 
-                  {/* Progress bar for top 3 */}
+                  {/* Progress bar for top 3 players */}
                   {index < 3 && leaderboardData.length > 0 && (
                     <div className="mt-3 md:mt-4 bg-black/30 rounded-full h-1.5 md:h-2 overflow-hidden">
                       <div
@@ -176,6 +190,7 @@ const EndGamePage = () => {
               ))}
             </div>
 
+            {/* Message if no leaderboard data is available */}
             {leaderboardData.length === 0 && (
               <div className="text-center py-8">
                 <div className="text-[#b7b4bb] text-lg mb-2">No battle data available</div>
@@ -184,7 +199,7 @@ const EndGamePage = () => {
             )}
           </div>
 
-          {/* Action Buttons */}
+          {/* Action Buttons - navigation to spectate or home */}
           <div className="space-y-3 md:space-y-4 max-w-md mx-auto">
             <Button
               onClick={() => navigate("/spectate")}
@@ -207,7 +222,7 @@ const EndGamePage = () => {
             </Button>
           </div>
 
-          {/* Battle Stats Summary */}
+          {/* Battle Stats Summary - shows summary stats for the battle */}
           {leaderboardData.length > 0 && (
             <div className="bg-gradient-to-r from-[#1f152b] to-[#0f051d] rounded-2xl p-4 md:p-6 border border-[#2a3441]/30 shadow-xl max-w-md mx-auto">
               <h4 className="text-white text-lg font-bold mb-4 flex items-center gap-2">

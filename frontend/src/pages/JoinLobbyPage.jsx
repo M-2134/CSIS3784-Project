@@ -1,3 +1,6 @@
+//Marco Pretorius (2024442606)
+//JJ Kleynhans (2024158442)
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BackgroundDecorations from "../components/BackgroundDecorations"
@@ -9,16 +12,20 @@ import { useWebSocket } from '../WebSocketContext';
 
 /**
  * Page for joining a lobby, now with class selection.
+ * Allows user to enter lobby code, username, and select class.
  */
+// Main component for joining a game lobby
 const JoinLobbyPage = () => {
-  const [lobbyCode, setLobbyCode] = useState('');
-  const [username, setUsername] = useState('');
-  const [selectedClass, setSelectedClass] = useState('Pistol'); // Default class
-  const navigate = useNavigate();
-  const [isLoading, setIsLoading] = useState(false)
 
-  const { sendMessage, lastMessage, wsStatus, ws } = useWebSocket();
+  // State variables for form fields and UI
+  const [lobbyCode, setLobbyCode] = useState(''); // Lobby code input
+  const [username, setUsername] = useState(''); // Username input
+  const [selectedClass, setSelectedClass] = useState('Pistol'); // Player class selection
+  const navigate = useNavigate(); // React Router navigation
+  const [isLoading, setIsLoading] = useState(false); // Loading state for join button
+  const { sendMessage, lastMessage, wsStatus, ws } = useWebSocket(); // WebSocket context
 
+  // Listen for backend responses to join lobby and handle navigation/errors
   React.useEffect(() => {
     if (!lastMessage) return;
     try {
@@ -50,6 +57,7 @@ const JoinLobbyPage = () => {
     }
   }, [lastMessage, navigate, lobbyCode, username]);
 
+  // Handle join lobby button click
   const handleJoinByCode = () => {
     if (!lobbyCode.trim() || !username.trim()) {
       alert('Please enter your username and a lobby code.');
@@ -96,11 +104,12 @@ const JoinLobbyPage = () => {
     }, 5000);
   };
 
+  // Render the join lobby page UI
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0f051d] via-[#1f152b] to-[#0f051d] relative overflow-hidden">
       <BackgroundDecorations />
 
-      {/* HBlast Header */}
+  {/* HBlast Header - shows app name and navigation */}
       <header className="flex justify-between items-center py-4 md:py-6 relative z-10 px-4 md:px-6 lg:px-8">
         <div className="flex items-center gap-4">
           <button
@@ -121,7 +130,7 @@ const JoinLobbyPage = () => {
 
       <main className="flex flex-grow flex-col items-center justify-center p-4 md:p-6 relative z-10 min-h-[calc(100vh-120px)]">
         <div className="w-full max-w-md">
-          {/* Hero Section */}
+          {/* Hero Section - title and description */}
           <div className="text-center mb-8 md:mb-12">
             <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-r from-[#741ff5] to-[#9351f7] rounded-full flex items-center justify-center">
               <Hash size={32} className="text-white" />
@@ -135,7 +144,7 @@ const JoinLobbyPage = () => {
             </p>
           </div>
 
-          {/* Join Form */}
+          {/* Join Form - main form for joining a lobby */}
           <div className="bg-gradient-to-br from-[#1f152b] to-[#0f051d] rounded-2xl p-6 md:p-8 border-2 border-[#9351f7]/40 shadow-xl mb-6">
             <form
               onSubmit={(e) => {
@@ -144,7 +153,7 @@ const JoinLobbyPage = () => {
               }}
               className="space-y-6"
             >
-              {/* Username Input */}
+              {/* Username Input - player's username */}
               <div>
                 <label className="block text-sm text-[#b7b4bb] mb-2 flex items-center gap-2">
                   <User size={16} className="text-[#e971ff]" />
@@ -158,7 +167,7 @@ const JoinLobbyPage = () => {
                 />
               </div>
 
-              {/* Lobby Code Input */}
+              {/* Lobby Code Input - code for the lobby to join */}
               <div>
                 <label className="block text-sm text-[#b7b4bb] mb-2 flex items-center gap-2">
                   <Hash size={16} className="text-[#e971ff]" />
@@ -174,7 +183,7 @@ const JoinLobbyPage = () => {
                 <p className="text-xs text-[#b7b4bb] mt-2">Ask the host for the 6-character lobby code</p>
               </div>
 
-              {/* Class Selector */}
+              {/* Class Selector - choose player class */}
               <div>
                 <label className="block text-sm text-[#b7b4bb] mb-3 flex items-center gap-2">
                   <Gamepad2 size={16} className="text-[#e971ff]" />
@@ -183,7 +192,7 @@ const JoinLobbyPage = () => {
                 <ClassSelector selectedClass={selectedClass} onSelectClass={setSelectedClass} />
               </div>
 
-              {/* Join Button */}
+              {/* Join Button - submit form to join lobby */}
               <Button
                 type="submit"
                 disabled={isLoading || !lobbyCode.trim() || !username.trim() || wsStatus !== 'open'}
@@ -208,7 +217,7 @@ const JoinLobbyPage = () => {
             </form>
           </div>
 
-          {/* Connection Status */}
+          {/* Connection Status - shows WebSocket connection state */}
           <div className="bg-gradient-to-r from-[#1f152b] to-[#0f051d] rounded-xl p-3 md:p-4 border border-[#2a3441]/30 flex items-center gap-3">
             <div
               className={`w-2 h-2 rounded-full ${wsStatus === "open" ? "bg-green-400 animate-pulse" : "bg-red-400"}`}

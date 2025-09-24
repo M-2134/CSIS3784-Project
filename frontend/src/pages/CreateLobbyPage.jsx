@@ -1,3 +1,6 @@
+//Marco Pretorius (2024442606)
+//JJ Kleynhans (2024158442)
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BackgroundDecorations from "../components/BackgroundDecorations"
@@ -10,14 +13,17 @@ import { useWebSocket } from '../WebSocketContext';
 /**
  * Page for creating a new game lobby with class selection.
  */
+// Main component for creating a new game lobby
 const CreateLobbyPage = () => {
-  const [lobbyName, setLobbyName] = useState('');
-  const [username, setUsername] = useState('');
-  const [maxPlayers, setMaxPlayers] = useState(8);
-  const [selectedClass, setSelectedClass] = useState('Pistol'); // Default class
-  const [isLoading, setIsLoading] = useState(false);
-  const navigate = useNavigate();
-  const { sendMessage, lastMessage, wsStatus, ws } = useWebSocket();
+
+  // State variables for form fields and UI
+  const [lobbyName, setLobbyName] = useState(''); // Lobby name input
+  const [username, setUsername] = useState(''); // Username input
+  const [maxPlayers, setMaxPlayers] = useState(8); // Max players slider
+  const [selectedClass, setSelectedClass] = useState('Pistol'); // Player class selection
+  const [isLoading, setIsLoading] = useState(false); // Loading state for create button
+  const navigate = useNavigate(); // React Router navigation
+  const { sendMessage, lastMessage, wsStatus, ws } = useWebSocket(); // WebSocket context
 
   // const handleCreateLobby = () => {
   //   if (!username.trim() || !lobbyName.trim()) {
@@ -39,6 +45,7 @@ const CreateLobbyPage = () => {
   // };
 
   // Listen for lobby_created response
+  // Listen for backend responses to lobby creation and handle navigation/errors
   React.useEffect(() => {
     if (!lastMessage) return;
     try {
@@ -81,6 +88,7 @@ const CreateLobbyPage = () => {
     }
   }, [lastMessage, navigate, isLoading, username]);
 
+  // Handle create lobby button click
   const handleCreateLobby = () => {
     // Validate that both name and code are filled out
     if (lobbyName.trim() === '') {
@@ -107,10 +115,9 @@ const CreateLobbyPage = () => {
 
     setIsLoading(true);
     console.log('Creating lobby with userId:', userId, 'username:', username.trim());
-    
-    // Store username immediately in localStorage
+    // Store username immediately in localStorage for later use
     localStorage.setItem('currentUsername', username.trim());
-    
+    // Build message to send to backend
     const createLobbyMessage = {
       type: 'create_lobby',
       name: lobbyName.trim(), // Trim lobby name
@@ -119,12 +126,11 @@ const CreateLobbyPage = () => {
       role: 'player',
       class: selectedClass.toLowerCase()
     };
-    
+    // Send create lobby request to backend
     console.log("Sending create lobby message:", createLobbyMessage);
     sendMessage(createLobbyMessage);
-    
+    // Store player class in localStorage
     localStorage.setItem('playerClass', selectedClass.toLowerCase());
-    
     // Add timeout fallback in case we don't get a response
     setTimeout(() => {
       if (isLoading) {
@@ -136,11 +142,12 @@ const CreateLobbyPage = () => {
     }, 5000);
   };
 
+  // Render the create lobby page UI
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0f051d] via-[#1f152b] to-[#0f051d] relative overflow-hidden">
       <BackgroundDecorations />
 
-      {/* HBlast Header */}
+  {/* HBlast Header - shows app name and navigation */}
       <header className="flex justify-between items-center py-4 md:py-6 relative z-10 px-4 md:px-6 lg:px-8">
         <div className="flex items-center gap-4">
           <button
@@ -161,7 +168,7 @@ const CreateLobbyPage = () => {
 
       <main className="flex flex-grow flex-col items-center justify-center p-4 md:p-6 relative z-10 min-h-[calc(100vh-120px)]">
         <div className="w-full max-w-md">
-          {/* Hero Section */}
+          {/* Hero Section - title and description */}
           <div className="text-center mb-8 md:mb-12">
             <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-r from-[#741ff5] to-[#9351f7] rounded-full flex items-center justify-center">
               <Crown size={32} className="text-white" />
@@ -173,10 +180,10 @@ const CreateLobbyPage = () => {
             <p className="text-[#b7b4bb] text-base md:text-lg">Set up your lobby and dominate as the host</p>
           </div>
 
-          {/* Create Form */}
+          {/* Create Form - main form for lobby creation */}
           <div className="bg-gradient-to-br from-[#1f152b] to-[#0f051d] rounded-2xl p-6 md:p-8 border-2 border-[#9351f7]/40 shadow-xl mb-6">
             <div className="space-y-6">
-              {/* Username Input */}
+              {/* Username Input - host's username */}
               <div>
                 <label className="block text-sm text-[#b7b4bb] mb-2 flex items-center gap-2">
                   <User size={16} className="text-[#e971ff]" />
@@ -190,7 +197,7 @@ const CreateLobbyPage = () => {
                 />
               </div>
 
-              {/* Lobby Name Input */}
+              {/* Lobby Name Input - name for the new lobby */}
               <div>
                 <label className="block text-sm text-[#b7b4bb] mb-2 flex items-center gap-2">
                   <Swords size={16} className="text-[#e971ff]" />
@@ -204,7 +211,7 @@ const CreateLobbyPage = () => {
                 />
               </div>
 
-              {/* Max Players Slider */}
+              {/* Max Players Slider - select number of players */}
               <div className="bg-gradient-to-r from-[#2a3441]/30 to-transparent rounded-xl p-4 border border-[#2a3441]/20">
                 <label className="flex items-center justify-between text-sm text-[#b7b4bb] mb-3">
                   <span className="flex items-center gap-2">
@@ -232,7 +239,7 @@ const CreateLobbyPage = () => {
                 </div>
               </div>
 
-              {/* Class Selector */}
+              {/* Class Selector - choose player class */}
               <div>
                 <label className="block text-sm text-[#b7b4bb] mb-3 flex items-center gap-2">
                   <Gamepad2 size={16} className="text-[#e971ff]" />
@@ -241,7 +248,7 @@ const CreateLobbyPage = () => {
                 <ClassSelector selectedClass={selectedClass} onSelectClass={setSelectedClass} />
               </div>
 
-              {/* Create Button */}
+              {/* Create Button - submit form to create lobby */}
               <Button
                 onClick={handleCreateLobby}
                 disabled={isLoading || !lobbyName.trim() || !username.trim() || wsStatus !== 'open'}
@@ -266,7 +273,7 @@ const CreateLobbyPage = () => {
             </div>
           </div>
 
-          {/* Connection Status */}
+          {/* Connection Status - shows WebSocket connection state */}
           <div className="bg-gradient-to-r from-[#1f152b] to-[#0f051d] rounded-xl p-3 md:p-4 border border-[#2a3441]/30 flex items-center gap-3">
             <div
               className={`w-2 h-2 rounded-full ${wsStatus === "open" ? "bg-green-400 animate-pulse" : "bg-red-400"}`}
