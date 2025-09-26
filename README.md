@@ -28,3 +28,20 @@ in the backend folder
 After completing the above steps, wait a few second and then click on the local host link.
 
 Enjoy!!!
+
+If visual aid is needed please follow the video tutorial in the fordel namer "Running HyperBlast"
+
+The game is also hosted using vercel and render, the game can be accessed using the following link
+
+```
+https://csis-3784-project.vercel.app/
+```
+
+Due to the backend being hosted on the free version of render, the backend goes to sleep after 10 min of inactive use.
+
+Click on play game
+Clcik on create a new lobby
+Wait 1 minute
+Refresh the page
+
+After completing the above steps, the server hosted on render would wake up, connect to the frontend and the game will function as normal
