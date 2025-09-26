@@ -40,7 +40,7 @@ https://csis-3784-project.vercel.app/
 Due to the backend being hosted on the free version of render, the backend goes to sleep after 10 min of inactive use.
 
 Click on play game
-Clcik on create a new lobby
+Click on create a new lobby
 Wait 1 minute
 Refresh the page
 
